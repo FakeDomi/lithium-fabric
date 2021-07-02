@@ -29,6 +29,7 @@ import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -38,6 +39,7 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static net.minecraft.block.entity.HopperBlockEntity.getInputItemEntities;
 
@@ -61,6 +63,12 @@ public abstract class HopperBlockEntityMixin extends BlockEntity implements Hopp
     protected abstract boolean isDisabled();
 
     @Shadow
+    private int transferCooldown;
+
+    @Unique
+    private int itemPickupCooldown;
+
+    @Shadow
     private long lastTickTime;
 
     @Shadow
@@ -68,6 +76,12 @@ public abstract class HopperBlockEntityMixin extends BlockEntity implements Hopp
 
     @Shadow
     private static native boolean canExtract(Inventory inv, ItemStack stack, int slot, Direction facing);
+
+    @Shadow
+    private static native boolean extract(Hopper hopper, Inventory inventory, int slot, Direction side);
+
+    @Shadow
+    private static native IntStream getAvailableSlots(Inventory inventory, Direction side);
 
     private long myLastInsertChangeCount, myLastExtractChangeCount, myLastCollectChangeCount;
 
@@ -540,5 +554,92 @@ public abstract class HopperBlockEntityMixin extends BlockEntity implements Hopp
         this.extractInventoryStackList = null;
         this.insertInventoryChangeCount = 0;
         this.extractInventoryChangeCount = 0;
+    }
+
+    @Overwrite
+    public static void serverTick(World world, BlockPos pos, BlockState state, HopperBlockEntity blockEntity) {
+        if (world.isClient()) {
+            return;
+        }
+
+        //noinspection ConstantConditions
+        HopperBlockEntityMixin hopper = (HopperBlockEntityMixin) (Object) blockEntity;
+        boolean enabled = state.get(HopperBlock.ENABLED);
+        int transferCooldown = hopper.transferCooldown - 1;
+
+        hopper.lastTickTime = world.getTime();
+
+        Inventory invAbove = null;
+        boolean cachedInv = false;
+
+        boolean hasDoneWork = false;
+
+        if (transferCooldown <= 0) {
+            transferCooldown = 0;
+
+            if (enabled) {
+                if (!lithiumHopperIsEmpty(blockEntity)) {
+                    hasDoneWork = lithiumInsert(world, pos, state, blockEntity);
+                }
+
+                if (!lithiumHopperIsFull(blockEntity)) {
+                    invAbove = getExtractInventory(world, blockEntity);
+                    cachedInv = true;
+
+                    if (invAbove != null) {
+                        CallbackInfoReturnable<Boolean> cir = new CallbackInfoReturnable<>("extract", true);
+                        lithiumExtract(world, blockEntity, cir, invAbove);
+
+                        if (cir.isCancelled()) {
+                            hasDoneWork |= cir.getReturnValue();
+                        } else {
+                            if (!isInventoryEmpty(invAbove, Direction.DOWN)) {
+                                // vanilla inv
+                                final Inventory finalInvAbove = invAbove;
+                                hasDoneWork |= getAvailableSlots(invAbove, Direction.DOWN).anyMatch(slot -> extract(blockEntity, finalInvAbove, slot, Direction.DOWN));
+                            }
+                        }
+                    }
+                }
+
+                if (hasDoneWork) {
+                    transferCooldown = 8;
+                }
+            }
+        }
+
+        hopper.transferCooldown = transferCooldown;
+
+        int itemPickupCooldown = hopper.itemPickupCooldown - 1;
+
+        if (itemPickupCooldown <= 0) {
+            itemPickupCooldown = 0;
+
+            if (enabled) {
+                boolean canPickUp = cachedInv ? (invAbove == null && !lithiumHopperIsFull(blockEntity)) : (!lithiumHopperIsFull(blockEntity) && getExtractInventory(world, blockEntity) == null);
+
+                if (canPickUp && tryPickupItems(world, blockEntity)) {
+                    hasDoneWork = true;
+                    itemPickupCooldown = 8;
+                }
+            }
+        }
+
+        hopper.itemPickupCooldown = itemPickupCooldown;
+
+        if (hasDoneWork) {
+            markDirty(world, pos, state);
+        }
+    }
+
+    @Unique
+    private static boolean tryPickupItems(World world, Hopper hopper) {
+        for (ItemEntity item : lithiumGetInputItemEntities(world, hopper)) {
+            if (HopperBlockEntity.extract(hopper, item)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
