@@ -1,4 +1,4 @@
-![Project icon](https://git-assets.jellysquid.me/hotlink-ok/lithium/icon-rounded-128px.png)
+<img src="src/main/resources/assets/lithium/icon.png" width="128">
 
 # Lithium (for Fabric)
 ![GitHub license](https://img.shields.io/github/license/CaffeineMC/lithium-fabric.svg)
@@ -82,11 +82,6 @@ we will expect that this is the case. Caveat emptor.
 If you are using the CurseForge client, you can continue to find downloads through our
 [CurseForge page](https://www.curseforge.com/minecraft/mc-mods/lithium). Unless you are using the CurseForge
 client, you should prefer the downloads linked on our Modrinth or GitHub release pages above.
-
-The CurseForge client does not natively support Fabric modding, so you will need to install
-[Jumploader](https://www.curseforge.com/minecraft/mc-mods/jumploader) in order to set up your Fabric environment. Due to
-the extra complexity and startup overhead this workaround adds, we generally do not recommend using this method unless
-you have an existing setup with it.
 
 ---
 

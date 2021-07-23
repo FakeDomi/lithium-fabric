@@ -5,7 +5,8 @@
     "name": "Lithium",
     "description": "Lithium is a free and open-source optimization mod for Minecraft which makes a wide range of performance improvements to the game.",
     "authors": [
-        "JellySquid"
+      "JellySquid",
+      "2No2Name"
     ],
     "contact": {
       "homepage": "https://jellysquid.me/projects/",
@@ -26,7 +27,10 @@
     "accessWidener": "lithium.accesswidener",
     "depends": {
       "fabricloader": ">=0.10.5",
-      "minecraft": "1.17"
+      "minecraft": [
+        "1.17",
+        "1.17.1"
+      ]
     },
     "breaks": {
         "optifabric": "*"

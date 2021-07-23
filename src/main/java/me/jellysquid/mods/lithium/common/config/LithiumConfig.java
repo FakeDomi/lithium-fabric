@@ -42,6 +42,9 @@ public class LithiumConfig {
         this.addMixinRule("ai.poi.fast_retrieval", true);
         this.addMixinRule("ai.raid", true);
         this.addMixinRule("ai.task", true);
+        this.addMixinRule("ai.task.fast_repetition", true);
+        this.addMixinRule("ai.task.goat_jump", true);
+        this.addMixinRule("ai.task.replace_streams", true);
 
         this.addMixinRule("alloc", true);
         this.addMixinRule("alloc.chunk_random", true);
@@ -59,9 +62,10 @@ public class LithiumConfig {
         this.addMixinRule("cached_hashcode", true);
 
         this.addMixinRule("chunk", true);
-        this.addMixinRule("chunk.count_oversized_blocks", true);
+        this.addMixinRule("chunk.block_counting", true);
         this.addMixinRule("chunk.entity_class_groups", true);
         this.addMixinRule("chunk.no_locking", true);
+        this.addMixinRule("chunk.no_validation", true);
         this.addMixinRule("chunk.palette", true);
         this.addMixinRule("chunk.section_update_tracking", true);
         this.addMixinRule("chunk.serialization", true);
@@ -115,11 +119,12 @@ public class LithiumConfig {
         this.addMixinRule("world.block_entity_ticking", true);
         this.addMixinRule("world.block_entity_ticking.support_cache", false); //have to check whether the cached state bugfix fixes any detectable vanilla bugs first
         this.addMixinRule("world.chunk_access", true);
-        this.addMixinRule("world.chunk_inline_block_access", true);
         this.addMixinRule("world.chunk_task_system", true);
         this.addMixinRule("world.chunk_tickets", true);
         this.addMixinRule("world.chunk_ticking", true);
         this.addMixinRule("world.explosions", true);
+        this.addMixinRule("world.inline_block_access", true);
+        this.addMixinRule("world.inline_height", true);
         this.addMixinRule("world.mob_spawning", true);
         this.addMixinRule("world.player_chunk_tick", true);
         this.addMixinRule("world.tick_scheduler", true);

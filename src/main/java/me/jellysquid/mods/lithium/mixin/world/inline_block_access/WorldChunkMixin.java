@@ -1,6 +1,5 @@
-package me.jellysquid.mods.lithium.mixin.world.chunk_inline_block_access;
+package me.jellysquid.mods.lithium.mixin.world.inline_block_access;
 
-import me.jellysquid.mods.lithium.common.util.Pos;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.fluid.FluidState;
@@ -37,10 +36,13 @@ public abstract class WorldChunkMixin implements Chunk {
         int y = pos.getY();
         int z = pos.getZ();
 
-        if (!this.isOutOfHeightLimit(y)) {
-            ChunkSection section = this.sections[Pos.SectionYIndex.fromBlockCoord(this, y)];
+        int chunkY = this.getSectionIndex(y);
+        if (chunkY >= 0 && chunkY < this.sections.length) {
+            ChunkSection section = this.sections[chunkY];
 
-            if (section != EMPTY_SECTION) {
+            //checking isEmpty cannot be skipped here. https://bugs.mojang.com/browse/MC-232360
+            // Chunk Sections that only contain air and cave_air are treated as empty
+            if (section != EMPTY_SECTION && !section.isEmpty()) {
                 return section.getBlockState(x & 15, y & 15, z & 15);
             }
         }
@@ -54,8 +56,9 @@ public abstract class WorldChunkMixin implements Chunk {
      */
     @Overwrite
     public FluidState getFluidState(int x, int y, int z) {
-        if (!this.isOutOfHeightLimit(y)) {
-            ChunkSection section = this.sections[Pos.SectionYIndex.fromBlockCoord(this, y)];
+        int chunkY = this.getSectionIndex(y);
+        if (chunkY >= 0 && chunkY < this.sections.length) {
+            ChunkSection section = this.sections[chunkY];
 
             if (section != EMPTY_SECTION) {
                 return section.getFluidState(x & 15, y & 15, z & 15);
