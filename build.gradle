@@ -1,19 +1,19 @@
 import net.fabricmc.loom.task.RemapJarTask
 
 plugins {
-    id 'fabric-loom' version '0.8-SNAPSHOT'
+    id 'fabric-loom' version '0.10-SNAPSHOT'
     id 'maven-publish'
 }
 
-minecraft {
-    accessWidener = file("src/main/resources/lithium.accesswidener")
-    refmapName = "mixins.lithium.refmap.json"
+loom {
+    accessWidenerPath = file("src/main/resources/lithium.accesswidener")
+    mixin.defaultRefmapName = "mixins.lithium.refmap.json"
 }
 
 apply plugin: 'fabric-loom'
 
-sourceCompatibility = JavaVersion.VERSION_16
-targetCompatibility = JavaVersion.VERSION_16
+sourceCompatibility = JavaVersion.VERSION_17
+targetCompatibility = JavaVersion.VERSION_17
 
 group = project.maven_group
 version = project.mod_version

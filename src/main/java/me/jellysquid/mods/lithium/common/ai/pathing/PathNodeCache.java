@@ -9,7 +9,7 @@ import net.minecraft.world.chunk.ChunkSection;
 
 public abstract class PathNodeCache {
     private static boolean isChunkSectionDangerousNeighbor(ChunkSection section) {
-        return section.getContainer()
+        return section.getBlockStateContainer()
                 .hasAny(state -> getNeighborPathNodeType(state) != PathNodeType.OPEN);
     }
 
@@ -31,7 +31,7 @@ public abstract class PathNodeCache {
      */
     public static boolean isSectionSafeAsNeighbor(ChunkSection section) {
         // Empty sections can never contribute a danger
-        if (ChunkSection.isEmpty(section)) {
+        if (section.isEmpty()) {
             return true;
         }
 

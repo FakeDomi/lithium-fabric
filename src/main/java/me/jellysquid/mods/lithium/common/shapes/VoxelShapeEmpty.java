@@ -2,6 +2,7 @@ package me.jellysquid.mods.lithium.common.shapes;
 
 import it.unimi.dsi.fastutil.doubles.DoubleArrayList;
 import it.unimi.dsi.fastutil.doubles.DoubleList;
+import net.minecraft.util.math.AxisCycleDirection;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelSet;
@@ -21,14 +22,13 @@ public class VoxelShapeEmpty extends VoxelShape implements VoxelShapeCaster {
     }
 
     @Override
-    public DoubleList getPointPositions(Direction.Axis axis) {
-        return EMPTY_LIST;
+    protected double calculateMaxDistance(AxisCycleDirection axisCycle, Box box, double maxDist) {
+        return maxDist;
     }
 
-    //    @Override
-    //TODO WHERE DID IT GO?
-    protected boolean contains(double x, double y, double z) {
-        return false;
+    @Override
+    public DoubleList getPointPositions(Direction.Axis axis) {
+        return EMPTY_LIST;
     }
 
     @Override

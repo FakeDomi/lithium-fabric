@@ -2,7 +2,7 @@ package me.jellysquid.mods.lithium.mixin.world.player_chunk_tick;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import me.jellysquid.mods.lithium.common.util.Pos;
-import net.minecraft.network.Packet;
+import net.minecraft.network.packet.s2c.play.ChunkDataS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ChunkHolder;
 import net.minecraft.server.world.PlayerChunkWatchingManager;
@@ -12,13 +12,19 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.chunk.WorldChunk;
+import org.apache.commons.lang3.mutable.MutableObject;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
 
+import static net.minecraft.server.world.ThreadedAnvilChunkStorage.method_39975;
+
 @Mixin(ThreadedAnvilChunkStorage.class)
 public abstract class ThreadedAnvilChunkStorageMixin {
+    @Shadow
+    protected abstract void sendChunkDataPackets(ServerPlayerEntity player, MutableObject<ChunkDataS2CPacket> cachedDataPacket, WorldChunk chunk);
+
     @Shadow
     protected abstract ChunkSectionPos updateWatchedSection(ServerPlayerEntity player);
 
@@ -87,18 +93,19 @@ public abstract class ThreadedAnvilChunkStorageMixin {
         int oldCenterZ = oldPos.getSectionZ();
 
         int watchRadius = this.watchDistance;
+        int watchRadiusIncr = watchRadius + 1;
         int watchDiameter = watchRadius * 2;
 
         if (Math.abs(oldCenterX - newCenterX) <= watchDiameter && Math.abs(oldCenterZ - newCenterZ) <= watchDiameter) {
-            int minX = Math.min(newCenterX, oldCenterX) - watchRadius;
-            int minZ = Math.min(newCenterZ, oldCenterZ) - watchRadius;
-            int maxX = Math.max(newCenterX, oldCenterX) + watchRadius;
-            int maxZ = Math.max(newCenterZ, oldCenterZ) + watchRadius;
+            int minX = Math.min(newCenterX, oldCenterX) - watchRadiusIncr;
+            int minZ = Math.min(newCenterZ, oldCenterZ) - watchRadiusIncr;
+            int maxX = Math.max(newCenterX, oldCenterX) + watchRadiusIncr;
+            int maxZ = Math.max(newCenterZ, oldCenterZ) + watchRadiusIncr;
 
             for (int x = minX; x <= maxX; x++) {
                 for (int z = minZ; z <= maxZ; z++) {
-                    boolean isWithinOldRadius = getChunkDistance(x, z, oldCenterX, oldCenterZ) <= watchRadius;
-                    boolean isWithinNewRadius = getChunkDistance(x, z, newCenterX, newCenterZ) <= watchRadius;
+                    boolean isWithinOldRadius = method_39975(x, z, oldCenterX, oldCenterZ, watchRadius);
+                    boolean isWithinNewRadius = method_39975(x, z, newCenterX, newCenterZ, watchRadius);
 
                     if (isWithinNewRadius && !isWithinOldRadius) {
                         this.startWatchingChunk(player, x, z);
@@ -110,15 +117,19 @@ public abstract class ThreadedAnvilChunkStorageMixin {
                 }
             }
         } else {
-            for (int x = oldCenterX - watchRadius; x <= oldCenterX + watchRadius; ++x) {
-                for (int z = oldCenterZ - watchRadius; z <= oldCenterZ + watchRadius; ++z) {
-                    this.stopWatchingChunk(player, x, z);
+            for (int x = oldCenterX - watchRadiusIncr; x <= oldCenterX + watchRadiusIncr; ++x) {
+                for (int z = oldCenterZ - watchRadiusIncr; z <= oldCenterZ + watchRadiusIncr; ++z) {
+                    if (method_39975(x, z, oldCenterX, oldCenterZ, watchRadius)) {
+                        this.stopWatchingChunk(player, x, z);
+                    }
                 }
             }
 
-            for (int x = newCenterX - watchRadius; x <= newCenterX + watchRadius; ++x) {
-                for (int z = newCenterZ - watchRadius; z <= newCenterZ + watchRadius; ++z) {
-                    this.startWatchingChunk(player, x, z);
+            for (int x = newCenterX - watchRadiusIncr; x <= newCenterX + watchRadiusIncr; ++x) {
+                for (int z = newCenterZ - watchRadiusIncr; z <= newCenterZ + watchRadiusIncr; ++z) {
+                    if (method_39975(x, z, newCenterX, newCenterZ, watchRadius)) {
+                        this.startWatchingChunk(player, x, z);
+                    }
                 }
             }
         }
@@ -131,17 +142,13 @@ public abstract class ThreadedAnvilChunkStorageMixin {
             WorldChunk chunk = holder.getWorldChunk();
 
             if (chunk != null) {
-                this.sendChunkDataPackets(player, new Packet[2], chunk);
+                this.sendChunkDataPackets(player, new MutableObject<>(), chunk);
             }
         }
     }
 
     protected void stopWatchingChunk(ServerPlayerEntity player, int x, int z) {
         player.sendUnloadChunkPacket(new ChunkPos(x, z));
-    }
-
-    private static int getChunkDistance(int x, int z, int centerX, int centerZ) {
-        return Math.max(Math.abs(x - centerX), Math.abs(z - centerZ));
     }
 
     @Shadow
@@ -168,7 +175,4 @@ public abstract class ThreadedAnvilChunkStorageMixin {
 
     @Shadow
     protected abstract ChunkHolder getChunkHolder(long pos);
-
-    @Shadow
-    protected abstract void sendChunkDataPackets(ServerPlayerEntity player, Packet<?>[] packets, WorldChunk chunk);
 }

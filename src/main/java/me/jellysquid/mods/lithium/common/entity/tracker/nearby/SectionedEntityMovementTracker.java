@@ -1,5 +1,6 @@
 package me.jellysquid.mods.lithium.common.entity.tracker.nearby;
 
+import it.unimi.dsi.fastutil.HashCommon;
 import me.jellysquid.mods.lithium.common.entity.tracker.EntityTrackerEngine;
 import me.jellysquid.mods.lithium.common.entity.tracker.EntityTrackerSection;
 import me.jellysquid.mods.lithium.common.util.tuples.WorldSectionBox;
@@ -22,13 +23,25 @@ public abstract class SectionedEntityMovementTracker<E extends EntityLike, S> {
     private int timesRegistered;
     private ArrayList<long[]> sectionChangeCounters;
 
-    private long lastChangeTime;
+    private long maxChangeTime;
 
     public SectionedEntityMovementTracker(WorldSectionBox interactionChunks, Class<S> clazz) {
         this.clazz = clazz;
         this.trackedWorldSections = interactionChunks;
         this.trackedClass = EntityTrackerEngine.MOVEMENT_NOTIFYING_ENTITY_CLASSES.indexOf(clazz);
         assert this.trackedClass != -1;
+    }
+
+    @Override
+    public int hashCode() {
+        return HashCommon.mix(this.trackedWorldSections.hashCode()) ^ HashCommon.mix(this.trackedClass) ^ this.getClass().hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj.getClass() == this.getClass() &&
+                this.clazz == ((SectionedEntityMovementTracker<?, ?>) obj).clazz &&
+                this.trackedWorldSections.equals(((SectionedEntityMovementTracker<?, ?>) obj).trackedWorldSections);
     }
 
     /**
@@ -39,7 +52,7 @@ public abstract class SectionedEntityMovementTracker<E extends EntityLike, S> {
      * @return whether any relevant entity moved in the tracked area
      */
     public boolean isUnchangedSince(long lastCheckedTime) {
-        if (lastCheckedTime <= this.lastChangeTime) {
+        if (lastCheckedTime <= this.maxChangeTime) {
             return false;
         }
         ArrayList<long[]> sectionChangeCounters = this.sectionChangeCounters;
@@ -47,8 +60,9 @@ public abstract class SectionedEntityMovementTracker<E extends EntityLike, S> {
         //noinspection ForLoopReplaceableByForEach
         for (int i = 0, numCounters = sectionChangeCounters.size(); i < numCounters; i++) {
             // >= instead of > is required here, as changes may occur in the same tick but after the last check
-            if (lastCheckedTime <= sectionChangeCounters.get(i)[trackedClass]) {
-                this.setChanged(lastCheckedTime);
+            long sectionChangeTime = sectionChangeCounters.get(i)[trackedClass];
+            if (lastCheckedTime <= sectionChangeTime) {
+                this.setChanged(sectionChangeTime);
                 return false;
             }
         }
@@ -57,29 +71,32 @@ public abstract class SectionedEntityMovementTracker<E extends EntityLike, S> {
 
     public void register(ServerWorld world) {
         assert world == this.trackedWorldSections.world();
-        //noinspection unchecked
-        SectionedEntityCache<E> cache = ((ServerEntityManagerAccessor<E>) ((ServerWorldAccessor) world).getEntityManager()).getCache();
 
-        this.sectionChangeCounters = new ArrayList<>();
-        WorldSectionBox trackedSections = this.trackedWorldSections;
-        int size = trackedSections.numSections();
-        assert size > 0;
-        this.sortedSections = new ArrayList<>(size);
-        this.sectionVisible = new boolean[size];
+        if (this.timesRegistered == 0) {
+            //noinspection unchecked
+            SectionedEntityCache<E> cache = ((ServerEntityManagerAccessor<E>) ((ServerWorldAccessor) world).getEntityManager()).getCache();
 
-        //vanilla iteration order in SectionedEntityCache is xzy
-        //WorldSectionBox upper coordinates are exclusive
-        for (int x = trackedSections.chunkX1(); x < trackedSections.chunkX2(); x++) {
-            for (int z = trackedSections.chunkZ1(); z < trackedSections.chunkZ2(); z++) {
-                for (int y = trackedSections.chunkY1(); y < trackedSections.chunkY2(); y++) {
-                    EntityTrackingSection<E> section = cache.getTrackingSection(ChunkSectionPos.asLong(x, y, z));
-                    EntityTrackerSection sectionAccess = (EntityTrackerSection) section;
-                    this.sortedSections.add(section);
-                    sectionAccess.addListener(this);
+            this.sectionChangeCounters = new ArrayList<>();
+            WorldSectionBox trackedSections = this.trackedWorldSections;
+            int size = trackedSections.numSections();
+            assert size > 0;
+            this.sortedSections = new ArrayList<>(size);
+            this.sectionVisible = new boolean[size];
+
+            //vanilla iteration order in SectionedEntityCache is xzy
+            //WorldSectionBox upper coordinates are exclusive
+            for (int x = trackedSections.chunkX1(); x < trackedSections.chunkX2(); x++) {
+                for (int z = trackedSections.chunkZ1(); z < trackedSections.chunkZ2(); z++) {
+                    for (int y = trackedSections.chunkY1(); y < trackedSections.chunkY2(); y++) {
+                        EntityTrackingSection<E> section = cache.getTrackingSection(ChunkSectionPos.asLong(x, y, z));
+                        EntityTrackerSection sectionAccess = (EntityTrackerSection) section;
+                        this.sortedSections.add(section);
+                        sectionAccess.addListener(this);
+                    }
                 }
             }
+            this.setChanged(world.getTime());
         }
-        this.setChanged(world.getTime());
 
         this.timesRegistered++;
     }
@@ -92,6 +109,9 @@ public abstract class SectionedEntityMovementTracker<E extends EntityLike, S> {
         assert this.timesRegistered == 0;
         //noinspection unchecked
         SectionedEntityCache<E> cache = ((ServerEntityManagerAccessor<E>) ((ServerWorldAccessor) world).getEntityManager()).getCache();
+        MovementTrackerCache storage = (MovementTrackerCache) cache;
+        storage.remove(this);
+
         ArrayList<EntityTrackingSection<E>> sections = this.sortedSections;
         for (int i = sections.size() - 1; i >= 0; i--) {
             EntityTrackingSection<E> section = sections.get(i);
@@ -122,7 +142,8 @@ public abstract class SectionedEntityMovementTracker<E extends EntityLike, S> {
      * Method that marks that new entities might have appeared or moved in the tracked chunk sections.
      */
     private void setChanged(long atTime) {
-        assert atTime > this.lastChangeTime;
-        this.lastChangeTime = atTime;
+        if (atTime > this.maxChangeTime) {
+            this.maxChangeTime = atTime;
+        }
     }
 }
