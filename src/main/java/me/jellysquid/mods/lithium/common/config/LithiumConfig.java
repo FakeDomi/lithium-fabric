@@ -32,27 +32,32 @@ public class LithiumConfig {
         // You must manually add a rule for any new mixins not covered by an existing package rule.
 
         this.addMixinRule("ai", true);
-        this.addMixinRule("ai.brain", true);
         this.addMixinRule("ai.nearby_entity_tracking", true);
         this.addMixinRule("ai.nearby_entity_tracking.goals", true);
         this.addMixinRule("ai.pathing", true);
         this.addMixinRule("ai.poi", true);
-        this.addMixinRule("ai.poi.fast_init", true);
-        this.addMixinRule("ai.poi.fast_retrieval", true);
+        this.addMixinRule("ai.poi.fast_portals", true);
+        this.addMixinRule("ai.poi.poi.tasks", true);
         this.addMixinRule("ai.raid", true);
+        this.addMixinRule("ai.sensor", true);
+        this.addMixinRule("ai.sensor.secondary_poi", true);
         this.addMixinRule("ai.task", true);
         this.addMixinRule("ai.task.fast_repetition", false); //removed during 1.18 update
         this.addMixinRule("ai.task.goat_jump", true);
+        this.addMixinRule("ai.task.launch", true);
+        this.addMixinRule("ai.task.memory_change_counting", true);
         this.addMixinRule("ai.task.replace_streams", true);
 
         this.addMixinRule("alloc", true);
+        this.addMixinRule("alloc.blockstate", true);
         this.addMixinRule("alloc.chunk_random", true);
         this.addMixinRule("alloc.chunk_ticking", true);
         this.addMixinRule("alloc.composter", true);
-        this.addMixinRule("alloc.deep_passenger", true);
+        this.addMixinRule("alloc.deep_passengers", true);
         this.addMixinRule("alloc.entity_tracker", true);
         this.addMixinRule("alloc.enum_values", true);
         this.addMixinRule("alloc.explosion_behavior", true);
+        this.addMixinRule("alloc.nbt", true);
 
         this.addMixinRule("block", true);
         this.addMixinRule("block.flatten_states", true);
@@ -69,27 +74,35 @@ public class LithiumConfig {
         this.addMixinRule("chunk.no_validation", true);
         this.addMixinRule("chunk.palette", true);
         this.addMixinRule("chunk.serialization", true);
-        this.addMixinRule("chunk.structure_storage", true);
 
         this.addMixinRule("collections", true);
+        this.addMixinRule("collections.attributes", true);
+        this.addMixinRule("collections.brain", true);
+        this.addMixinRule("collections.entity_by_type", true);
         this.addMixinRule("collections.entity_filtering", true);
+        this.addMixinRule("collections.entity_ticking", true);
         this.addMixinRule("collections.gamerules", true);
         this.addMixinRule("collections.goals", true);
+        this.addMixinRule("collections.mob_spawning", true);
 
         this.addMixinRule("entity", true);
         this.addMixinRule("entity.collisions", true);
+        this.addMixinRule("entity.collisions.fluid", true);
         this.addMixinRule("entity.collisions.intersection", true);
         this.addMixinRule("entity.collisions.movement", true);
         this.addMixinRule("entity.collisions.suffocation", true);
+        this.addMixinRule("entity.collisions.unpushable_cramming", true);
         this.addMixinRule("entity.data_tracker", true);
         this.addMixinRule("entity.data_tracker.no_locks", true);
         this.addMixinRule("entity.data_tracker.use_arrays", true);
+        this.addMixinRule("entity.fast_elytra_check", true);
+        this.addMixinRule("entity.fast_hand_swing", true);
+        this.addMixinRule("entity.fast_powder_snow_check", true);
         this.addMixinRule("entity.fast_retrieval", true);
-        this.addMixinRule("entity.gravity_check_block_below", false); //removed during 1.18-rc1 update
         this.addMixinRule("entity.inactive_navigations", true);
         this.addMixinRule("entity.replace_entitytype_predicates", true);
+        this.addMixinRule("entity.skip_equipment_change_check", true);
         this.addMixinRule("entity.skip_fire_check", true);
-        this.addMixinRule("entity.stream_entity_collisions_lazily", false); //removed during 1.18 update
 
         this.addMixinRule("gen", true);
         this.addMixinRule("gen.biome_noise_cache", false); //removed during 1.18 update
@@ -108,6 +121,8 @@ public class LithiumConfig {
         this.addMixinRule("math.fast_util", true);
         this.addMixinRule("math.sine_lut", true);
 
+        this.addMixinRule("profiler", true);
+
         this.addMixinRule("shapes", true);
         this.addMixinRule("shapes.blockstate_cache", true);
         this.addMixinRule("shapes.lazy_shape_context", true);
@@ -116,7 +131,8 @@ public class LithiumConfig {
         this.addMixinRule("shapes.shape_merging", true);
         this.addMixinRule("shapes.specialized_shapes", true);
 
-        this.addMixinRule("tag", true);
+        this.addMixinRule("util", true);
+        this.addMixinRule("util.entity_section_position", true);
 
         this.addMixinRule("world", true);
         this.addMixinRule("world.block_entity_retrieval", true);
@@ -128,14 +144,19 @@ public class LithiumConfig {
         this.addMixinRule("world.explosions", true);
         this.addMixinRule("world.inline_block_access", true);
         this.addMixinRule("world.inline_height", true);
-        this.addMixinRule("world.mob_spawning", true);
         this.addMixinRule("world.player_chunk_tick", true);
         this.addMixinRule("world.tick_scheduler", false); //removed during 1.18 update
 
+        this.addRuleDependency("ai.nearby_entity_tracking", "util", true);
+        this.addRuleDependency("ai.nearby_entity_tracking", "util.entity_section_position", true);
         this.addRuleDependency("block.hopper", "ai", true);
         this.addRuleDependency("block.hopper", "ai.nearby_entity_tracking", true);
         this.addRuleDependency("block.hopper", "world", true);
         this.addRuleDependency("block.hopper", "world.block_entity_retrieval", true);
+
+        this.addRuleDependency("entity.collisions.fluid", "chunk", true);
+        this.addRuleDependency("entity.collisions.fluid", "chunk.block_counting", true);
+
     }
 
     /**

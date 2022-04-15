@@ -1,9 +1,9 @@
 package me.jellysquid.mods.lithium.mixin.chunk.block_counting;
 
+import me.jellysquid.mods.lithium.common.block.BlockCountingSection;
 import me.jellysquid.mods.lithium.common.block.BlockStateFlagHolder;
 import me.jellysquid.mods.lithium.common.block.BlockStateFlags;
-import me.jellysquid.mods.lithium.common.block.IndexedBlockStatePredicate;
-import me.jellysquid.mods.lithium.common.block.SectionFlagHolder;
+import me.jellysquid.mods.lithium.common.block.TrackedBlockStatePredicate;
 import net.minecraft.block.BlockState;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.world.chunk.ChunkSection;
@@ -25,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
  * @author 2No2Name
  */
 @Mixin(ChunkSection.class)
-public abstract class ChunkSectionMixin implements SectionFlagHolder {
+public abstract class ChunkSectionMixin implements BlockCountingSection {
     @Shadow
     public abstract void calculateCounts();
 
@@ -33,8 +33,8 @@ public abstract class ChunkSectionMixin implements SectionFlagHolder {
     private short[] countsByFlag = new short[BlockStateFlags.NUM_FLAGS];
 
     @Override
-    public boolean getFlag(IndexedBlockStatePredicate indexedBlockStatePredicate) {
-        return this.countsByFlag[indexedBlockStatePredicate.getIndex()] != 0;
+    public boolean anyMatch(TrackedBlockStatePredicate trackedBlockStatePredicate) {
+        return this.countsByFlag[trackedBlockStatePredicate.getIndex()] != (short) 0;
     }
 
     @Redirect(

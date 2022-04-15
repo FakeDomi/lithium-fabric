@@ -18,9 +18,9 @@ public class ServerChunkManagerMixin {
     @Redirect(
             method = "tickChunks()V",
             at = @At(
-                    remap = false,
                     value = "INVOKE",
-                    target = "Lcom/google/common/collect/Lists;newArrayListWithCapacity(I)Ljava/util/ArrayList;"
+                    target = "Lcom/google/common/collect/Lists;newArrayListWithCapacity(I)Ljava/util/ArrayList;",
+                    remap = false
             )
     )
     private ArrayList<ChunkHolder> redirectChunksListClone(int initialArraySize) {
@@ -31,8 +31,8 @@ public class ServerChunkManagerMixin {
         return list;
     }
 
-    @Inject(method = "tick(Ljava/util/function/BooleanSupplier;)V", at = @At("HEAD"))
-    private void preTick(BooleanSupplier shouldKeepTicking, CallbackInfo ci) {
+    @Inject(method = "tick(Ljava/util/function/BooleanSupplier;Z)V", at = @At("HEAD"))
+    private void preTick(BooleanSupplier shouldKeepTicking, boolean tickChunks, CallbackInfo ci) {
         // Ensure references aren't leaked through this list
         this.cachedChunkList.clear();
     }
