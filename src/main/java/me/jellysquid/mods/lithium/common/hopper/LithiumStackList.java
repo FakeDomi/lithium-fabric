@@ -1,12 +1,14 @@
 package me.jellysquid.mods.lithium.common.hopper;
 
 import me.jellysquid.mods.lithium.api.inventory.LithiumDefaultedList;
+import me.jellysquid.mods.lithium.common.block.entity.inventory_change_tracking.InventoryChangeTracker;
 import me.jellysquid.mods.lithium.mixin.block.hopper.DefaultedListAccessor;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.MathHelper;
+import org.jetbrains.annotations.NotNull;
 
 public class LithiumStackList extends DefaultedList<ItemStack> implements LithiumDefaultedList {
     final int maxCountPerStack;
@@ -21,6 +23,8 @@ public class LithiumStackList extends DefaultedList<ItemStack> implements Lithiu
     private int fullSlots;
 
     LithiumDoubleStackList parent; //only used for double chests
+
+    InventoryChangeTracker inventoryModificationCallback;
 
     public LithiumStackList(DefaultedList<ItemStack> original, int maxCountPerStack) {
         //noinspection unchecked
@@ -46,12 +50,15 @@ public class LithiumStackList extends DefaultedList<ItemStack> implements Lithiu
                 ((StorableItemStack) (Object) stack).registerToInventory(this, i);
             }
         }
+
+        this.inventoryModificationCallback = null;
     }
 
     public LithiumStackList(int maxCountPerStack) {
         super(null, ItemStack.EMPTY);
         this.maxCountPerStack = maxCountPerStack;
         this.cachedSignalStrength = -1;
+        this.inventoryModificationCallback = null;
     }
     public long getModCount() {
         return this.modCount;
@@ -65,6 +72,7 @@ public class LithiumStackList extends DefaultedList<ItemStack> implements Lithiu
         this.occupiedSlots = 0;
         this.fullSlots = 0;
         int size = this.size();
+        //noinspection ForLoopReplaceableByForEach
         for (int i = 0; i < size; i++) {
             ItemStack stack = this.get(i);
             if (!stack.isEmpty()) {
@@ -108,6 +116,12 @@ public class LithiumStackList extends DefaultedList<ItemStack> implements Lithiu
         this.cachedSignalStrength = -1;
         this.cachedComparatorUpdatePattern = null;
         this.modCount++;
+
+        InventoryChangeTracker inventoryModificationCallback = this.inventoryModificationCallback;
+        if (inventoryModificationCallback != null) {
+            this.inventoryModificationCallback = null;
+            inventoryModificationCallback.emitContentModified();
+        }
     }
 
     @Override
@@ -210,7 +224,7 @@ public class LithiumStackList extends DefaultedList<ItemStack> implements Lithiu
 
     /**
      * @param masterStackList the stacklist of the inventory that comparators read from (double inventory for double chests)
-     * @param inventory the blockentity / inventory that this stacklist is inside
+     * @param inventory       the blockentity / inventory that this stacklist is inside
      */
     public void runComparatorUpdatePatternOnFailedExtract(LithiumStackList masterStackList, Inventory inventory) {
         if (inventory instanceof BlockEntity) {
@@ -219,6 +233,10 @@ public class LithiumStackList extends DefaultedList<ItemStack> implements Lithiu
             }
             this.cachedComparatorUpdatePattern.apply((BlockEntity) inventory, masterStackList);
         }
+    }
+
+    public boolean maybeSendsComparatorUpdatesOnFailedExtract() {
+        return this.cachedComparatorUpdatePattern == null || this.cachedComparatorUpdatePattern != ComparatorUpdatePattern.NO_UPDATE;
     }
 
     public int getOccupiedSlots() {
@@ -231,6 +249,20 @@ public class LithiumStackList extends DefaultedList<ItemStack> implements Lithiu
 
     @Override
     public void changedInteractionConditions() {
-        this.modCount++;
+        this.changed();
+    }
+
+
+    public void setInventoryModificationCallback(@NotNull InventoryChangeTracker inventoryModificationCallback) {
+        if (this.inventoryModificationCallback != null && this.inventoryModificationCallback != inventoryModificationCallback) {
+            this.inventoryModificationCallback.emitCallbackReplaced();
+        }
+        this.inventoryModificationCallback = inventoryModificationCallback;
+    }
+
+    public void removeInventoryModificationCallback(@NotNull InventoryChangeTracker inventoryModificationCallback) {
+        if (this.inventoryModificationCallback != null && this.inventoryModificationCallback == inventoryModificationCallback) {
+            this.inventoryModificationCallback = null;
+        }
     }
 }

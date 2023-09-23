@@ -14,11 +14,11 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 
 /**
  * This patch makes a number of optimizations to chunk retrieval which helps to alleviate some of the slowdown introduced
@@ -60,11 +60,15 @@ public abstract class ServerChunkManagerMixin {
     protected abstract boolean isMissingForLevel(ChunkHolder holder, int maxLevel);
 
     @Shadow
-    abstract boolean tick();
+    public abstract void tick(BooleanSupplier shouldKeepTicking, boolean tickChunks);
+
+    @Shadow
+    abstract boolean updateChunks();
+
     private long time;
 
-    @Inject(method = "tick()Z", at = @At("HEAD"))
-    private void preTick(CallbackInfoReturnable<Boolean> cir) {
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void preTick(BooleanSupplier shouldKeepTicking, boolean tickChunks, CallbackInfo ci) {
         this.time++;
     }
 
@@ -125,7 +129,7 @@ public abstract class ServerChunkManagerMixin {
      */
     private Chunk getChunkBlocking(int x, int z, ChunkStatus status, boolean create) {
         final long key = ChunkPos.toLong(x, z);
-        final int level = 33 + ChunkStatus.getDistanceFromFull(status);
+        final int level = ChunkLevels.getLevelFromStatus(status);
 
         ChunkHolder holder = this.getChunkHolder(key);
 
@@ -136,7 +140,7 @@ public abstract class ServerChunkManagerMixin {
                 this.createChunkLoadTicket(x, z, level);
 
                 // Tick the chunk manager to have our new ticket processed
-                this.tick();
+                this.updateChunks();
 
                 // Try to fetch the holder again now that we have requested a load
                 holder = this.getChunkHolder(key);
@@ -149,7 +153,7 @@ public abstract class ServerChunkManagerMixin {
                 // The holder is absent and we weren't asked to create anything, so return null
                 return null;
             }
-        } else if (((ChunkHolderExtended) holder).updateLastAccessTime(this.time)) {
+        } else if (create && ((ChunkHolderExtended) holder).updateLastAccessTime(this.time)) {
             // Only create a new chunk ticket if one hasn't already been submitted this tick
             // This maintains vanilla behavior (preventing chunks from being immediately unloaded) while also
             // eliminating the cost of submitting a ticket for most chunk fetches
@@ -178,7 +182,7 @@ public abstract class ServerChunkManagerMixin {
 
         // Create a future to load the chunk if none exists
         if (loadFuture == null) {
-            if (ChunkHolder.getTargetStatusForLevel(holder.getLevel()).isAtLeast(status)) {
+            if (ChunkLevels.getStatus(holder.getLevel()).isAtLeast(status)) {
                 // Create a new future which upgrades the chunk from the previous status level to the desired one
                 CompletableFuture<Either<Chunk, ChunkHolder.Unloaded>> mergedFuture = this.threadedAnvilChunkStorage.getChunk(holder, status);
 

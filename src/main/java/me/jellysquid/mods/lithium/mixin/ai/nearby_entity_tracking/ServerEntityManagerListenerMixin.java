@@ -1,9 +1,8 @@
 package me.jellysquid.mods.lithium.mixin.ai.nearby_entity_tracking;
 
-import me.jellysquid.mods.lithium.common.entity.tracker.EntityTrackerEngine;
-import me.jellysquid.mods.lithium.common.entity.tracker.EntityTrackerSection;
-import me.jellysquid.mods.lithium.common.entity.tracker.nearby.NearbyEntityListenerMulti;
-import me.jellysquid.mods.lithium.common.entity.tracker.nearby.NearbyEntityListenerProvider;
+import me.jellysquid.mods.lithium.common.entity.nearby_tracker.NearbyEntityListenerMulti;
+import me.jellysquid.mods.lithium.common.entity.nearby_tracker.NearbyEntityListenerProvider;
+import me.jellysquid.mods.lithium.common.util.tuples.Range6Int;
 import net.minecraft.entity.Entity;
 import net.minecraft.server.world.ServerEntityManager;
 import net.minecraft.util.math.BlockPos;
@@ -16,14 +15,11 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 @Mixin(targets = "net/minecraft/server/world/ServerEntityManager$Listener")
 public class ServerEntityManagerListenerMixin<T extends EntityLike> {
-    @Shadow
-    private EntityTrackingSection<T> section;
     @Shadow
     @Final
     private T entity;
@@ -36,22 +32,6 @@ public class ServerEntityManagerListenerMixin<T extends EntityLike> {
     @Shadow
     private long sectionPos;
 
-    private int notificationMask;
-
-    @Inject(method = "<init>", at = @At("RETURN"))
-    private void init(ServerEntityManager<?> outer, T entityLike, long l, EntityTrackingSection<T> entityTrackingSection, CallbackInfo ci) {
-        this.notificationMask = EntityTrackerEngine.getNotificationMask(this.entity.getClass());
-
-        //Fix #284 Summoned inventory minecarts do not immediately notify hoppers of their presence when created using summon command
-        this.notifyMovementListeners();
-    }
-
-    @ModifyVariable(method = "updateEntityPosition()V", at = @At("RETURN"))
-    private long updateEntityTrackerEngine(long sectionPos) {
-        this.notifyMovementListeners();
-        return sectionPos;
-    }
-
     @Inject(
             method = "updateEntityPosition()V",
             at = @At(
@@ -61,18 +41,18 @@ public class ServerEntityManagerListenerMixin<T extends EntityLike> {
             ),
             locals = LocalCapture.CAPTURE_FAILHARD
     )
-    private void onAddEntity(CallbackInfo ci, BlockPos blockPos, long newPos, EntityTrackingStatus entityTrackingStatus, EntityTrackingSection<T> entityTrackingSection) {
+    private void onUpdateEntityPosition(CallbackInfo ci, BlockPos blockPos, long newPos, EntityTrackingStatus entityTrackingStatus, EntityTrackingSection<T> entityTrackingSection) {
         NearbyEntityListenerMulti listener = ((NearbyEntityListenerProvider) this.entity).getListener();
         if (listener != null)
         {
+            Range6Int chunkRange = listener.getChunkRange();
             //noinspection unchecked
-            listener.forEachChunkInRangeChange(
+            listener.updateChunkRegistrations(
                     ((ServerEntityManagerAccessor<T>) this.manager).getCache(),
-                    ChunkSectionPos.from(this.sectionPos),
-                    ChunkSectionPos.from(newPos)
+                    ChunkSectionPos.from(this.sectionPos), chunkRange,
+                    ChunkSectionPos.from(newPos), chunkRange
             );
         }
-        this.notifyMovementListeners();
     }
 
     @Inject(
@@ -85,18 +65,10 @@ public class ServerEntityManagerListenerMixin<T extends EntityLike> {
         NearbyEntityListenerMulti listener = ((NearbyEntityListenerProvider) this.entity).getListener();
         if (listener != null) {
             //noinspection unchecked
-            listener.forEachChunkInRangeChange(
+            listener.removeFromAllChunksInRange(
                     ((ServerEntityManagerAccessor<T>) this.manager).getCache(),
-                    ChunkSectionPos.from(this.sectionPos),
-                    null
+                    ChunkSectionPos.from(this.sectionPos)
             );
-        }
-        this.notifyMovementListeners();
-    }
-
-    private void notifyMovementListeners() {
-        if (this.notificationMask != 0) {
-            ((EntityTrackerSection) this.section).updateMovementTimestamps(this.notificationMask, ((Entity) this.entity).getEntityWorld().getTime());
         }
     }
 }

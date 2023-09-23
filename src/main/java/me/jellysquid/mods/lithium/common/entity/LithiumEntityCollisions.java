@@ -2,17 +2,25 @@ package me.jellysquid.mods.lithium.common.entity;
 
 import com.google.common.collect.AbstractIterator;
 import me.jellysquid.mods.lithium.common.entity.movement.ChunkAwareBlockCollisionSweeper;
+import me.jellysquid.mods.lithium.common.util.Pos;
 import me.jellysquid.mods.lithium.common.world.WorldHelper;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.function.BooleanBiFunction;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.CollisionView;
 import net.minecraft.world.EntityView;
 import net.minecraft.world.World;
 import net.minecraft.world.border.WorldBorder;
+import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.ChunkSection;
+import net.minecraft.world.chunk.ChunkStatus;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,19 +36,14 @@ public class LithiumEntityCollisions {
      * Checks against the world border are replaced with our own optimized functions which do not go through the
      * VoxelShape system.
      */
-    public static List<VoxelShape> getBlockCollisions(CollisionView world, Entity entity, Box box) {
-        ArrayList<VoxelShape> shapes = new ArrayList<>();
-        ChunkAwareBlockCollisionSweeper sweeper = new ChunkAwareBlockCollisionSweeper(world, entity, box);
-        while (sweeper.hasNext()) {
-            shapes.add(sweeper.next());
-        }
-        return shapes;
+    public static List<VoxelShape> getBlockCollisions(World world, Entity entity, Box box) {
+        return new ChunkAwareBlockCollisionSweeper(world, entity, box).collectAll();
     }
 
     /***
      * @return True if the box (possibly that of an entity's) collided with any blocks
      */
-    public static boolean doesBoxCollideWithBlocks(CollisionView world, Entity entity, Box box) {
+    public static boolean doesBoxCollideWithBlocks(World world, Entity entity, Box box) {
         final ChunkAwareBlockCollisionSweeper sweeper = new ChunkAwareBlockCollisionSweeper(world, entity, box);
 
         final VoxelShape shape = sweeper.computeNext();
@@ -110,7 +113,7 @@ public class LithiumEntityCollisions {
                                 //get the world border at the end
                                 if (includeWorldBorder && !this.consumedWorldBorder) {
                                     this.consumedWorldBorder = true;
-                                    WorldBorder worldBorder = entity.world.getWorldBorder();
+                                    WorldBorder worldBorder = entity.getWorld().getWorldBorder();
                                     if (!isWithinWorldBorder(worldBorder, box) && isWithinWorldBorder(worldBorder, entity.getBoundingBox())) {
                                         return worldBorder.asVoxelShape();
                                     }
@@ -181,5 +184,20 @@ public class LithiumEntityCollisions {
         Box box = entity.getBoundingBox();
         WorldBorder worldBorder = collisionView.getWorldBorder();
         return worldBorder.canCollide(entity, box) ? worldBorder.asVoxelShape() : null;
+    }
+
+    public static VoxelShape getCollisionShapeBelowEntity(World world, @Nullable Entity entity, Box entityBoundingBox) {
+        int x = MathHelper.floor(entityBoundingBox.minX + (entityBoundingBox.maxX - entityBoundingBox.minX) / 2);
+        int y = MathHelper.floor(entityBoundingBox.minY);
+        int z = MathHelper.floor(entityBoundingBox.minZ + (entityBoundingBox.maxZ - entityBoundingBox.minZ) / 2);
+        if (world.isOutOfHeightLimit(y)) {
+            return null;
+        }
+        Chunk chunk = world.getChunk(Pos.ChunkCoord.fromBlockCoord(x), Pos.ChunkCoord.fromBlockCoord(z), ChunkStatus.FULL, false);
+        if (chunk != null) {
+            ChunkSection cachedChunkSection = chunk.getSectionArray()[Pos.SectionYIndex.fromBlockCoord(world, y)];
+            return cachedChunkSection.getBlockState(x & 15, y & 15, z & 15).getCollisionShape(world, new BlockPos(x, y, z), entity == null ? ShapeContext.absent() : ShapeContext.of(entity));
+        }
+        return null;
     }
 }

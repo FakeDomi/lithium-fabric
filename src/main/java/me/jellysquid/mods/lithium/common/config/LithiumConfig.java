@@ -1,6 +1,7 @@
 package me.jellysquid.mods.lithium.common.config;
 
 import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
+import me.jellysquid.mods.lithium.common.compat.worldedit.WorldEditCompat;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.CustomValue;
@@ -27,128 +28,55 @@ public class LithiumConfig {
     private final Map<String, Option> options = new HashMap<>();
     private final Set<Option> optionsWithDependencies = new ObjectLinkedOpenHashSet<>();
 
+    private void applyLithiumCompat() {
+        Option option = this.options.get("mixin.block.hopper.worldedit_compat");
+        if (!option.isEnabled() && WorldEditCompat.WORLD_EDIT_PRESENT) {
+            option.addModOverride(true, "lithium-fabric");
+        }
+    }
+
     private LithiumConfig() {
         // Defines the default rules which can be configured by the user or other mods.
-        // You must manually add a rule for any new mixins not covered by an existing package rule.
+        InputStream defaultPropertiesStream = LithiumConfig.class.getResourceAsStream("/assets/lithium/lithium-mixin-config-default.properties");
+        if (defaultPropertiesStream == null) {
+            throw new IllegalStateException("Lithium mixin config default properties could not be read!");
+        }
+        try (BufferedReader propertiesReader = new BufferedReader(new InputStreamReader(defaultPropertiesStream))) {
+            Properties properties = new Properties();
+            properties.load(propertiesReader);
+            properties.forEach((ruleName, enabled) -> this.addMixinRule((String) ruleName, Boolean.parseBoolean((String) enabled)));
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new IllegalStateException("Lithium mixin config default properties could not be read!");
+        }
 
-        this.addMixinRule("ai", true);
-        this.addMixinRule("ai.nearby_entity_tracking", true);
-        this.addMixinRule("ai.nearby_entity_tracking.goals", true);
-        this.addMixinRule("ai.pathing", true);
-        this.addMixinRule("ai.poi", true);
-        this.addMixinRule("ai.poi.fast_portals", true);
-        this.addMixinRule("ai.poi.poi.tasks", true);
-        this.addMixinRule("ai.raid", true);
-        this.addMixinRule("ai.sensor", true);
-        this.addMixinRule("ai.sensor.secondary_poi", true);
-        this.addMixinRule("ai.task", true);
-        this.addMixinRule("ai.task.launch", true);
-        this.addMixinRule("ai.task.memory_change_counting", true);
-        this.addMixinRule("ai.task.replace_streams", true);
-
-        this.addMixinRule("alloc", true);
-        this.addMixinRule("alloc.blockstate", true);
-        this.addMixinRule("alloc.chunk_random", true);
-        this.addMixinRule("alloc.chunk_ticking", true);
-        this.addMixinRule("alloc.composter", true);
-        this.addMixinRule("alloc.deep_passengers", true);
-        this.addMixinRule("alloc.entity_tracker", true);
-        this.addMixinRule("alloc.enum_values", true);
-        this.addMixinRule("alloc.explosion_behavior", true);
-        this.addMixinRule("alloc.nbt", true);
-
-        this.addMixinRule("block", true);
-        this.addMixinRule("block.flatten_states", true);
-        this.addMixinRule("block.hopper", true);
-        this.addMixinRule("block.moving_block_shapes", true);
-        this.addMixinRule("block.redstone_wire", true);
-
-        this.addMixinRule("cached_hashcode", true);
-
-        this.addMixinRule("chunk", true);
-        this.addMixinRule("chunk.block_counting", true);
-        this.addMixinRule("chunk.entity_class_groups", true);
-        this.addMixinRule("chunk.no_locking", true);
-        this.addMixinRule("chunk.no_validation", true);
-        this.addMixinRule("chunk.palette", true);
-        this.addMixinRule("chunk.serialization", true);
-
-        this.addMixinRule("collections", true);
-        this.addMixinRule("collections.attributes", true);
-        this.addMixinRule("collections.brain", true);
-        this.addMixinRule("collections.entity_by_type", true);
-        this.addMixinRule("collections.entity_filtering", true);
-        this.addMixinRule("collections.entity_ticking", true);
-        this.addMixinRule("collections.gamerules", true);
-        this.addMixinRule("collections.goals", true);
-        this.addMixinRule("collections.mob_spawning", true);
-
-        this.addMixinRule("entity", true);
-        this.addMixinRule("entity.collisions", true);
-        this.addMixinRule("entity.collisions.fluid", true);
-        this.addMixinRule("entity.collisions.intersection", true);
-        this.addMixinRule("entity.collisions.movement", true);
-        this.addMixinRule("entity.collisions.suffocation", true);
-        this.addMixinRule("entity.collisions.unpushable_cramming", true);
-        this.addMixinRule("entity.data_tracker", true);
-        this.addMixinRule("entity.data_tracker.no_locks", true);
-        this.addMixinRule("entity.data_tracker.use_arrays", true);
-        this.addMixinRule("entity.fast_elytra_check", true);
-        this.addMixinRule("entity.fast_hand_swing", true);
-        this.addMixinRule("entity.fast_powder_snow_check", true);
-        this.addMixinRule("entity.fast_retrieval", true);
-        this.addMixinRule("entity.inactive_navigations", true);
-        this.addMixinRule("entity.replace_entitytype_predicates", true);
-        this.addMixinRule("entity.skip_equipment_change_check", true);
-        this.addMixinRule("entity.skip_fire_check", true);
-
-        this.addMixinRule("gen", true);
-        this.addMixinRule("gen.cached_generator_settings", true);
-        this.addMixinRule("gen.chunk_region", true);
-
-        this.addMixinRule("item", true);
-
-        this.addMixinRule("math", true);
-        this.addMixinRule("math.fast_blockpos", true);
-        this.addMixinRule("math.fast_util", true);
-        this.addMixinRule("math.sine_lut", true);
-
-        this.addMixinRule("profiler", true);
-
-        this.addMixinRule("shapes", true);
-        this.addMixinRule("shapes.blockstate_cache", true);
-        this.addMixinRule("shapes.lazy_shape_context", true);
-        this.addMixinRule("shapes.optimized_matching", true);
-        this.addMixinRule("shapes.precompute_shape_arrays", true);
-        this.addMixinRule("shapes.shape_merging", true);
-        this.addMixinRule("shapes.specialized_shapes", true);
-
-        this.addMixinRule("util", true);
-        this.addMixinRule("util.entity_section_position", true);
-
-        this.addMixinRule("world", true);
-        this.addMixinRule("world.block_entity_retrieval", true);
-        this.addMixinRule("world.block_entity_ticking", true);
-        this.addMixinRule("world.block_entity_ticking.support_cache", false); //have to check whether the cached state bugfix fixes any detectable vanilla bugs first
-        this.addMixinRule("world.chunk_access", true);
-        this.addMixinRule("world.chunk_tickets", true);
-        this.addMixinRule("world.chunk_ticking", true);
-        this.addMixinRule("world.explosions", true);
-        this.addMixinRule("world.inline_block_access", true);
-        this.addMixinRule("world.inline_height", true);
-        this.addMixinRule("world.player_chunk_tick", true);
-        this.addMixinRule("world.tick_scheduler", true);
-
-        this.addRuleDependency("ai.nearby_entity_tracking", "util", true);
-        this.addRuleDependency("ai.nearby_entity_tracking", "util.entity_section_position", true);
-        this.addRuleDependency("block.hopper", "ai", true);
-        this.addRuleDependency("block.hopper", "ai.nearby_entity_tracking", true);
-        this.addRuleDependency("block.hopper", "world", true);
-        this.addRuleDependency("block.hopper", "world.block_entity_retrieval", true);
-
-        this.addRuleDependency("entity.collisions.fluid", "chunk", true);
-        this.addRuleDependency("entity.collisions.fluid", "chunk.block_counting", true);
-
+        InputStream dependenciesStream = LithiumConfig.class.getResourceAsStream("/assets/lithium/lithium-mixin-config-dependencies.properties");
+        if (dependenciesStream == null) {
+            throw new IllegalStateException("Lithium mixin config dependencies could not be read!");
+        }
+        try (BufferedReader propertiesReader = new BufferedReader(new InputStreamReader(dependenciesStream))) {
+            Properties properties = new Properties();
+            properties.load(propertiesReader);
+            properties.forEach(
+                    (o1, o2) -> {
+                        String rulename = (String) o1;
+                        String dependencies = (String) o2;
+                        String[] dependenciesSplit = dependencies.split(",");
+                        for (String dependency : dependenciesSplit) {
+                            String[] split = dependency.split(":");
+                            if (split.length != 2) {
+                                return;
+                            }
+                            String dependencyName = split[0];
+                            String requiredState = split[1];
+                            this.addRuleDependency(rulename, dependencyName, Boolean.parseBoolean(requiredState));
+                        }
+                    }
+            );
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new IllegalStateException("Lithium mixin config dependencies could not be read!");
+        }
     }
 
     /**
@@ -175,12 +103,15 @@ public class LithiumConfig {
                 LOGGER.warn("Could not write default configuration file", e);
             }
         }
+        config.applyLithiumCompat();
 
         config.applyModOverrides();
 
         // Check dependencies several times, because one iteration may disable a rule required by another rule
         // This terminates because each additional iteration will disable one or more rules, and there is only a finite number of rules
+        //noinspection StatementWithEmptyBody
         while (config.applyDependencies()) {
+            //noinspection UnnecessarySemicolon
             ;
         }
 
@@ -197,14 +128,12 @@ public class LithiumConfig {
      */
     @SuppressWarnings("SameParameterValue")
     private void addRuleDependency(String rule, String dependency, boolean requiredValue) {
-        String ruleOptionName = getMixinRuleName(rule);
-        Option option = this.options.get(ruleOptionName);
+        Option option = this.options.get(rule);
         if (option == null) {
             LOGGER.error("Option {} for dependency '{} depends on {}={}' not found. Skipping.", rule, rule, dependency, requiredValue);
             return;
         }
-        String dependencyOptionName = getMixinRuleName(dependency);
-        Option dependencyOption = this.options.get(dependencyOptionName);
+        Option dependencyOption = this.options.get(dependency);
         if (dependencyOption == null) {
             LOGGER.error("Option {} for dependency '{} depends on {}={}' not found. Skipping.", dependency, rule, dependency, requiredValue);
             return;
@@ -222,9 +151,7 @@ public class LithiumConfig {
      * @throws IllegalStateException If a rule with that name already exists
      */
     private void addMixinRule(String mixin, boolean enabled) {
-        String name = getMixinRuleName(mixin);
-
-        if (this.options.putIfAbsent(name, new Option(name, enabled, false)) != null) {
+        if (this.options.putIfAbsent(mixin, new Option(mixin, enabled, false)) != null) {
             throw new IllegalStateException("Mixin rule already defined: " + mixin);
         }
     }
@@ -276,6 +203,9 @@ public class LithiumConfig {
     }
 
     private void applyModOverride(ModMetadata meta, String name, CustomValue value) {
+        if (!name.startsWith("mixin.")) {
+            name = getMixinRuleName(name);
+        }
         Option option = this.options.get(name);
 
         if (option == null) {
@@ -339,7 +269,7 @@ public class LithiumConfig {
     private boolean applyDependencies() {
         boolean changed = false;
         for (Option optionWithDependency : this.optionsWithDependencies) {
-            changed |= optionWithDependency.disableIfDependenciesNotMet(LOGGER);
+            changed |= optionWithDependency.disableIfDependenciesNotMet(LOGGER, this);
         }
         return changed;
     }
@@ -358,6 +288,7 @@ public class LithiumConfig {
         try (Writer writer = new FileWriter(file)) {
             writer.write("# This is the configuration file for Lithium.\n");
             writer.write("# This file exists for debugging purposes and should not be configured otherwise.\n");
+            writer.write("# Before configuring anything, take a backup of the worlds that will be opened.\n");
             writer.write("#\n");
             writer.write("# You can find information on editing this file and all the available options here:\n");
             writer.write("# https://github.com/jellysquid3/lithium-fabric/wiki/Configuration-File\n");
@@ -379,5 +310,17 @@ public class LithiumConfig {
                 .stream()
                 .filter(Option::isOverridden)
                 .count();
+    }
+
+    public Option getParent(Option option) {
+        String optionName = option.getName();
+        int split;
+
+        if ((split = optionName.lastIndexOf('.')) != -1) {
+            String key = optionName.substring(0, split);
+            return this.options.get(key);
+
+        }
+        return null;
     }
 }

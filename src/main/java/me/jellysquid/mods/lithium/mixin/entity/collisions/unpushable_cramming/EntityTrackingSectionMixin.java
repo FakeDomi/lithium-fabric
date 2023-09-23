@@ -3,13 +3,14 @@ package me.jellysquid.mods.lithium.mixin.entity.collisions.unpushable_cramming;
 import me.jellysquid.mods.lithium.common.entity.pushable.BlockCachingEntity;
 import me.jellysquid.mods.lithium.common.entity.pushable.EntityPushablePredicate;
 import me.jellysquid.mods.lithium.common.entity.pushable.PushableEntityClassGroup;
-import me.jellysquid.mods.lithium.common.util.collections.MaskedList;
+import me.jellysquid.mods.lithium.common.util.collections.ReferenceMaskedList;
 import me.jellysquid.mods.lithium.common.world.ClimbingMobCachingSection;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.boss.dragon.EnderDragonEntity;
-import net.minecraft.tag.BlockTags;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.collection.TypeFilterableList;
+import net.minecraft.util.function.LazyIterationConsumer;
 import net.minecraft.util.math.Box;
 import net.minecraft.world.World;
 import net.minecraft.world.entity.EntityLike;
@@ -21,8 +22,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -40,10 +41,10 @@ public abstract class EntityTrackingSectionMixin<T extends EntityLike> implement
      * and therefore cannot be pushed (only applied to some entity types) are hidden by the mask until the cache is cleared.
      */
     @Unique
-    private MaskedList<Entity> pushableEntities;
+    private ReferenceMaskedList<Entity> pushableEntities;
 
     @Override
-    public void collectPushableEntities(World world, Entity except, Box box, EntityPushablePredicate<? super Entity> entityPushablePredicate, ArrayList<Entity> entities) {
+    public LazyIterationConsumer.NextIteration collectPushableEntities(World world, Entity except, Box box, EntityPushablePredicate<? super Entity> entityPushablePredicate, ArrayList<Entity> entities) {
         Iterator<?> entityIterator;
         if (this.pushableEntities != null) {
             entityIterator = this.pushableEntities.iterator();
@@ -66,10 +67,11 @@ public abstract class EntityTrackingSectionMixin<T extends EntityLike> implement
         if (this.pushableEntities == null && i >= 25 && i >= (j * 2)) {
             this.startFilteringPushableEntities();
         }
+        return LazyIterationConsumer.NextIteration.CONTINUE;
     }
 
     private void startFilteringPushableEntities() {
-        this.pushableEntities = new MaskedList<>();
+        this.pushableEntities = new ReferenceMaskedList<>();
         for (T entity : this.collection) {
             this.onStartClimbingCachingEntity((Entity) entity);
         }
@@ -128,8 +130,8 @@ public abstract class EntityTrackingSectionMixin<T extends EntityLike> implement
         }
     }
 
-    @ModifyVariable(method = "remove(Lnet/minecraft/world/entity/EntityLike;)Z", at = @At("RETURN"), argsOnly = true)
-    private T onEntityRemoved(final T entityLike) {
+    @Inject(method = "remove(Lnet/minecraft/world/entity/EntityLike;)Z", at = @At("RETURN"))
+    private void onEntityRemoved(T entityLike, CallbackInfoReturnable<Boolean> cir) {
         if (this.pushableEntities != null) {
             if (!this.status.shouldTrack()) {
                 this.stopFilteringPushableEntities();
@@ -137,7 +139,6 @@ public abstract class EntityTrackingSectionMixin<T extends EntityLike> implement
                 this.pushableEntities.remove((Entity) entityLike);
             }
         }
-        return entityLike;
     }
 
     /**

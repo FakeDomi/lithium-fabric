@@ -8,9 +8,9 @@ import me.jellysquid.mods.lithium.common.util.Pos;
 import me.jellysquid.mods.lithium.common.util.collections.ListeningLong2ObjectOpenHashMap;
 import me.jellysquid.mods.lithium.common.world.interests.RegionBasedStorageSectionExtended;
 import net.minecraft.datafixer.DataFixTypes;
+import net.minecraft.registry.DynamicRegistryManager;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.ChunkSectionPos;
-import net.minecraft.util.registry.DynamicRegistryManager;
 import net.minecraft.world.HeightLimitView;
 import net.minecraft.world.storage.SerializingRegionBasedStorage;
 import org.spongepowered.asm.mixin.Final;
@@ -53,8 +53,25 @@ public abstract class SerializingRegionBasedStorageMixin<R> implements RegionBas
     }
 
     private void onEntryRemoved(long key, Optional<R> value) {
-        // NO-OP... vanilla never removes anything, leaking entries.
-        // We might want to fix this.
+        int y = Pos.SectionYIndex.fromSectionCoord(this.world, ChunkSectionPos.unpackY(key));
+
+        // We only care about items belonging to a valid sub-chunk
+        if (y < 0 || y >= Pos.SectionYIndex.getNumYSections(this.world)) {
+            return;
+        }
+
+        int x = ChunkSectionPos.unpackX(key);
+        int z = ChunkSectionPos.unpackZ(key);
+
+        long pos = ChunkPos.toLong(x, z);
+        BitSet flags = this.columns.get(pos);
+
+        if (flags != null) {
+            flags.clear(y);
+            if (flags.isEmpty()) {
+                this.columns.remove(pos);
+            }
+        }
     }
 
     private void onEntryAdded(long key, Optional<R> value) {
@@ -112,6 +129,7 @@ public abstract class SerializingRegionBasedStorageMixin<R> implements RegionBas
         }
 
         Long2ObjectMap<Optional<R>> loadedElements = this.loadedElements;
+        HeightLimitView world = this.world;
 
         return () -> new AbstractIterator<>() {
             private int nextBit = sectionsWithPOI.nextSetBit(0);

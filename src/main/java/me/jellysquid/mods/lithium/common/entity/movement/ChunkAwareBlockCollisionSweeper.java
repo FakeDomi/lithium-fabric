@@ -15,9 +15,13 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
-import net.minecraft.world.CollisionView;
+import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.ChunkSection;
+import net.minecraft.world.chunk.ChunkStatus;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static me.jellysquid.mods.lithium.common.entity.LithiumEntityCollisions.EPSILON;
 
@@ -39,7 +43,7 @@ public class ChunkAwareBlockCollisionSweeper extends AbstractIterator<VoxelShape
      */
     private final VoxelShape shape;
 
-    private final CollisionView view;
+    private final World world;
 
     private final ShapeContext context;
 
@@ -51,6 +55,12 @@ public class ChunkAwareBlockCollisionSweeper extends AbstractIterator<VoxelShape
     private int cStartX, cStartZ;
     private int cEndX, cEndZ;
     private int cX, cY, cZ;
+    
+    private int maxHitX;
+    private int maxHitY;
+    private int maxHitZ;
+    private int maxIndex;
+    private int index;
 
     private int cTotalSize;
     private int cIterated;
@@ -59,16 +69,16 @@ public class ChunkAwareBlockCollisionSweeper extends AbstractIterator<VoxelShape
     private Chunk cachedChunk;
     private ChunkSection cachedChunkSection;
 
-    public ChunkAwareBlockCollisionSweeper(CollisionView view, Entity entity, Box box) {
+    public ChunkAwareBlockCollisionSweeper(World world, Entity entity, Box box) {
         this.box = box;
         this.shape = VoxelShapes.cuboid(box);
         this.context = entity == null ? ShapeContext.absent() : ShapeContext.of(entity);
-        this.view = view;
+        this.world = world;
 
         this.minX = MathHelper.floor(box.minX - EPSILON);
         this.maxX = MathHelper.floor(box.maxX + EPSILON);
-        this.minY = MathHelper.clamp(MathHelper.floor(box.minY - EPSILON), Pos.BlockCoord.getMinY(this.view), Pos.BlockCoord.getMaxYInclusive(this.view));
-        this.maxY = MathHelper.clamp(MathHelper.floor(box.maxY + EPSILON), Pos.BlockCoord.getMinY(this.view), Pos.BlockCoord.getMaxYInclusive(this.view));
+        this.minY = MathHelper.clamp(MathHelper.floor(box.minY - EPSILON), Pos.BlockCoord.getMinY(this.world), Pos.BlockCoord.getMaxYInclusive(this.world));
+        this.maxY = MathHelper.clamp(MathHelper.floor(box.maxY + EPSILON), Pos.BlockCoord.getMinY(this.world), Pos.BlockCoord.getMaxYInclusive(this.world));
         this.minZ = MathHelper.floor(box.minZ - EPSILON);
         this.maxZ = MathHelper.floor(box.maxZ + EPSILON);
 
@@ -77,6 +87,12 @@ public class ChunkAwareBlockCollisionSweeper extends AbstractIterator<VoxelShape
 
         this.cIterated = 0;
         this.cTotalSize = 0;
+
+        this.maxHitX = Integer.MIN_VALUE;
+        this.maxHitY = Integer.MIN_VALUE;
+        this.maxHitZ = Integer.MIN_VALUE;
+        this.maxIndex = Integer.MIN_VALUE;
+        this.index = 0;
 
         //decrement as first nextSection call will increment it again
         this.chunkX--;
@@ -89,19 +105,19 @@ public class ChunkAwareBlockCollisionSweeper extends AbstractIterator<VoxelShape
                 //note: this.minX, maxX etc are not expanded, so there are lots of +1 and -1 around.
                 if (
                         this.cachedChunk != null &&
-                        this.chunkYIndex < Pos.SectionYIndex.getMaxYSectionIndexInclusive(this.view) &&
-                        this.chunkYIndex < Pos.SectionYIndex.fromBlockCoord(this.view,expandMax(this.maxY))
+                        this.chunkYIndex < Pos.SectionYIndex.getMaxYSectionIndexInclusive(this.world) &&
+                        this.chunkYIndex < Pos.SectionYIndex.fromBlockCoord(this.world,expandMax(this.maxY))
                 ) {
                     this.chunkYIndex++;
                     this.cachedChunkSection = this.cachedChunk.getSectionArray()[this.chunkYIndex];
                 } else {
                     this.chunkYIndex = MathHelper.clamp(
-                            Pos.SectionYIndex.fromBlockCoord(this.view, expandMin(this.minY)),
-                            Pos.SectionYIndex.getMinYSectionIndex(this.view),
-                            Pos.SectionYIndex.getMaxYSectionIndexInclusive(this.view)
+                            Pos.SectionYIndex.fromBlockCoord(this.world, expandMin(this.minY)),
+                            Pos.SectionYIndex.getMinYSectionIndex(this.world),
+                            Pos.SectionYIndex.getMaxYSectionIndexInclusive(this.world)
                     );
 
-                    if ((this.chunkX < Pos.ChunkCoord.fromBlockCoord(expandMax(this.maxX)))) {
+                    if (this.chunkX < Pos.ChunkCoord.fromBlockCoord(expandMax(this.maxX))) {
                         //first initialization takes this branch
                         this.chunkX++;
                     } else {
@@ -114,7 +130,7 @@ public class ChunkAwareBlockCollisionSweeper extends AbstractIterator<VoxelShape
                         }
                     }
                     //Casting to Chunk is not checked, together with other mods this could cause a ClassCastException
-                    this.cachedChunk = (Chunk) this.view.getChunkAsView(this.chunkX, this.chunkZ);
+                    this.cachedChunk = this.world.getChunk(this.chunkX, this.chunkZ, ChunkStatus.FULL, false);
                     if (this.cachedChunk != null) {
                         this.cachedChunkSection = this.cachedChunk.getSectionArray()[this.chunkYIndex];
                     }
@@ -127,11 +143,11 @@ public class ChunkAwareBlockCollisionSweeper extends AbstractIterator<VoxelShape
             int sizeExtension = this.sectionOversizedBlocks ? 1 : 0;
 
             this.cEndX = Math.min(this.maxX + sizeExtension, Pos.BlockCoord.getMaxInSectionCoord(this.chunkX));
-            int cEndY = Math.min(this.maxY + sizeExtension, Pos.BlockCoord.getMaxYInSectionIndex(this.view, this.chunkYIndex));
+            int cEndY = Math.min(this.maxY + sizeExtension, Pos.BlockCoord.getMaxYInSectionIndex(this.world, this.chunkYIndex));
             this.cEndZ = Math.min(this.maxZ + sizeExtension, Pos.BlockCoord.getMaxInSectionCoord(this.chunkZ));
 
             this.cStartX = Math.max(this.minX - sizeExtension, Pos.BlockCoord.getMinInSectionCoord(this.chunkX));
-            int cStartY = Math.max(this.minY - sizeExtension, Pos.BlockCoord.getMinYInSectionIndex(this.view, this.chunkYIndex));
+            int cStartY = Math.max(this.minY - sizeExtension, Pos.BlockCoord.getMinYInSectionIndex(this.world, this.chunkYIndex));
             this.cStartZ = Math.max(this.minZ - sizeExtension, Pos.BlockCoord.getMinInSectionCoord(this.chunkZ));
             this.cX = this.cStartX;
             this.cY = cStartY;
@@ -200,11 +216,19 @@ public class ChunkAwareBlockCollisionSweeper extends AbstractIterator<VoxelShape
 
             this.pos.set(x, y, z);
 
-            VoxelShape collisionShape = state.getCollisionShape(this.view, this.pos, this.context);
+            VoxelShape collisionShape = state.getCollisionShape(this.world, this.pos, this.context);
 
-            if (collisionShape != VoxelShapes.empty()) {
+            if (collisionShape != VoxelShapes.empty() && collisionShape != null /*collisionShape should never be null, but we received crash reports.*/) {
                 VoxelShape collidedShape = getCollidedShape(this.box, this.shape, collisionShape, x, y, z);
                 if (collidedShape != null) {
+                    if (z >= this.maxHitZ && (z > this.maxHitZ || y >= this.maxHitY && (y > this.maxHitY || x > this.maxHitX))) {
+                        this.maxHitX = x;
+                        this.maxHitY = y;
+                        this.maxHitZ = z;
+                        this.maxIndex = this.index;
+                    }
+                    this.index++;
+
                     return collidedShape;
                 }
             }
@@ -266,8 +290,23 @@ public class ChunkAwareBlockCollisionSweeper extends AbstractIterator<VoxelShape
     private static boolean hasChunkSectionOversizedBlocks(Chunk chunk, int chunkY) {
         if (BlockStateFlags.ENABLED) {
             ChunkSection section = chunk.getSectionArray()[chunkY];
-            return section != null && ((BlockCountingSection) section).anyMatch(BlockStateFlags.OVERSIZED_SHAPE);
+            return section != null && ((BlockCountingSection) section).mayContainAny(BlockStateFlags.OVERSIZED_SHAPE);
         }
         return true; //like vanilla, assume that a chunk section has oversized blocks, when the section mixin isn't loaded
+    }
+
+    public List<VoxelShape> collectAll() {
+        ArrayList<VoxelShape> collisions = new ArrayList<>();
+
+        while (this.hasNext()) {
+            collisions.add(this.next());
+        }
+        if (collisions.size() >= 2) {
+            //Swap the maxIndex element to the end.
+            //Part of a fix of wrong movement when last collision results in movement smaller than 1e-7. Changing which collision is the last one will change the result. https://github.com/CaffeineMC/lithium-fabric/issues/443
+            collisions.set(this.maxIndex, collisions.set(collisions.size() - 1, collisions.get(this.maxIndex)));
+        }
+
+        return collisions;
     }
 }

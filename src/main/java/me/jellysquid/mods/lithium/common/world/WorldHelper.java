@@ -10,6 +10,7 @@ import me.jellysquid.mods.lithium.mixin.chunk.entity_class_groups.ServerEntityMa
 import me.jellysquid.mods.lithium.mixin.chunk.entity_class_groups.ServerWorldAccessor;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.collection.TypeFilterableList;
+import net.minecraft.util.function.LazyIterationConsumer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.world.EntityView;
@@ -49,6 +50,7 @@ public class WorldHelper {
         return entityView.getOtherEntities(collidingEntity, box);
     }
 
+    //Requires chunk.entity_class_groups
     public static SectionedEntityCache<Entity> getEntityCacheOrNull(World world) {
         if (world instanceof ClientWorldAccessor) {
             //noinspection unchecked
@@ -75,6 +77,7 @@ public class WorldHelper {
                     }
                 }
             }
+            return LazyIterationConsumer.NextIteration.CONTINUE;
         });
         return entities;
     }
@@ -87,9 +90,20 @@ public class WorldHelper {
 
     public static boolean areNeighborsWithinSameChunk(BlockPos pos) {
         int localX = pos.getX() & 15;
+        int localZ = pos.getZ() & 15;
+
+        return localX > 0 && localZ > 0 && localX < 15 && localZ < 15;
+    }
+
+    public static boolean areNeighborsWithinSameChunkSection(BlockPos pos) {
+        int localX = pos.getX() & 15;
         int localY = pos.getY() & 15;
         int localZ = pos.getZ() & 15;
 
         return localX > 0 && localY > 0 && localZ > 0 && localX < 15 && localY < 15 && localZ < 15;
+    }
+
+    public static boolean arePosWithinSameChunk(BlockPos pos1, BlockPos pos2) {
+        return pos1.getX() >> 4 == pos2.getX() >> 4 && pos1.getZ() >> 4 == pos2.getZ() >> 4;
     }
 }
