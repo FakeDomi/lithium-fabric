@@ -1,17 +1,17 @@
 package me.jellysquid.mods.lithium.mixin.ai.poi;
 
 import com.google.common.collect.AbstractIterator;
-import com.mojang.datafixers.DataFixer;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import me.jellysquid.mods.lithium.common.util.Pos;
 import me.jellysquid.mods.lithium.common.util.collections.ListeningLong2ObjectOpenHashMap;
 import me.jellysquid.mods.lithium.common.world.interests.RegionBasedStorageSectionExtended;
-import net.minecraft.datafixer.DataFixTypes;
 import net.minecraft.registry.DynamicRegistryManager;
+import net.minecraft.server.world.ChunkErrorHandler;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.HeightLimitView;
+import net.minecraft.world.storage.ChunkPosKeyedStorage;
 import net.minecraft.world.storage.SerializingRegionBasedStorage;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,7 +21,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -47,7 +46,7 @@ public abstract class SerializingRegionBasedStorageMixin<R> implements RegionBas
 
     @SuppressWarnings("rawtypes")
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void init(Path path, Function codecFactory, Function factory, DataFixer dataFixer, DataFixTypes dataFixTypes, boolean dsync, DynamicRegistryManager dynamicRegistryManager, HeightLimitView world, CallbackInfo ci) {
+    private void init(ChunkPosKeyedStorage storageAccess, Function codecFactory, Function factory, DynamicRegistryManager registryManager, ChunkErrorHandler errorHandler, HeightLimitView world, CallbackInfo ci) {
         this.columns = new Long2ObjectOpenHashMap<>();
         this.loadedElements = new ListeningLong2ObjectOpenHashMap<>(this::onEntryAdded, this::onEntryRemoved);
     }
@@ -97,7 +96,7 @@ public abstract class SerializingRegionBasedStorageMixin<R> implements RegionBas
     }
 
     @Override
-    public Stream<R> getWithinChunkColumn(int chunkX, int chunkZ) {
+    public Stream<R> lithium$getWithinChunkColumn(int chunkX, int chunkZ) {
         BitSet sectionsWithPOI = this.getNonEmptyPOISections(chunkX, chunkZ);
 
         // No items are present in this column
@@ -120,7 +119,7 @@ public abstract class SerializingRegionBasedStorageMixin<R> implements RegionBas
     }
 
     @Override
-    public Iterable<R> getInChunkColumn(int chunkX, int chunkZ) {
+    public Iterable<R> lithium$getInChunkColumn(int chunkX, int chunkZ) {
         BitSet sectionsWithPOI = this.getNonEmptyPOISections(chunkX, chunkZ);
 
         // No items are present in this column

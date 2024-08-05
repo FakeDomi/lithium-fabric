@@ -3,8 +3,9 @@ package me.jellysquid.mods.lithium.common.entity.block_tracking;
 import me.jellysquid.mods.lithium.common.block.BlockListeningSection;
 import me.jellysquid.mods.lithium.common.block.ListeningBlockStatePredicate;
 import me.jellysquid.mods.lithium.common.util.Pos;
-import me.jellysquid.mods.lithium.common.util.deduplication.LithiumInternerWrapper;
+import me.jellysquid.mods.lithium.common.util.deduplication.LithiumInterner;
 import me.jellysquid.mods.lithium.common.util.tuples.WorldSectionBox;
+import me.jellysquid.mods.lithium.common.world.LithiumData;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.World;
@@ -22,7 +23,7 @@ public class SectionedBlockChangeTracker {
     private long maxChangeTime;
 
     private int timesRegistered;
-    //Some sections may not exist / be unloaded. We have to be aware of those. //TODO Invalidation when sections / chunks unload (but the entity does not (?), not sure whether this is possible)
+    //Some sections may not exist / be unloaded. We have to be aware of those. //TODO Invalidation when sections / chunks unload (but the entity does not (?), not sure whether this is possible) -> might be possible with entities riding lazy loaded vehicles and pushed to different chunks
     boolean isListeningToAll = false;
     private ArrayList<ChunkSectionPos> sectionsNotListeningTo = null;
     private ArrayList<BlockListeningSection> sectionsUnsubscribed = null;
@@ -41,8 +42,9 @@ public class SectionedBlockChangeTracker {
     public static SectionedBlockChangeTracker registerAt(World world, Box entityBoundingBox, ListeningBlockStatePredicate blockGroup) {
         WorldSectionBox worldSectionBox = WorldSectionBox.relevantExpandedBlocksBox(world, entityBoundingBox);
         SectionedBlockChangeTracker tracker = new SectionedBlockChangeTracker(worldSectionBox, blockGroup);
-        //noinspection unchecked
-        tracker = ((LithiumInternerWrapper<SectionedBlockChangeTracker>)world).getCanonical(tracker);
+
+        LithiumInterner<SectionedBlockChangeTracker> blockChangeTrackers = ((LithiumData) world).lithium$getData().blockChangeTrackers();
+        tracker = blockChangeTrackers.getCanonical(tracker);
 
         tracker.register();
         return tracker;
@@ -57,26 +59,30 @@ public class SectionedBlockChangeTracker {
             WorldSectionBox trackedSections = this.trackedWorldSections;
             for (int x = trackedSections.chunkX1(); x < trackedSections.chunkX2(); x++) {
                 for (int z = trackedSections.chunkZ1(); z < trackedSections.chunkZ2(); z++) {
-                    Chunk chunk = trackedSections.world().getChunk(x, z, ChunkStatus.FULL, false);
+                    World world = trackedSections.world();
+                    Chunk chunk = world.getChunk(x, z, ChunkStatus.FULL, false);
                     ChunkSection[] sectionArray = chunk == null ? null : chunk.getSectionArray();
                     for (int y = trackedSections.chunkY1(); y < trackedSections.chunkY2(); y++) {
-                        if (Pos.SectionYCoord.getMinYSection(trackedSections.world()) > y || Pos.SectionYCoord.getMaxYSectionExclusive(trackedSections.world()) <= y) {
+                        if (Pos.SectionYCoord.getMinYSection(world) > y || Pos.SectionYCoord.getMaxYSectionExclusive(world) <= y) {
                             continue;
                         }
+                        ChunkSectionPos sectionPos = ChunkSectionPos.from(x, y, z);
                         if (sectionArray == null) {
                             if (this.sectionsNotListeningTo == null) {
                                 this.sectionsNotListeningTo = new ArrayList<>();
                             }
-                            this.sectionsNotListeningTo.add(ChunkSectionPos.from(x, y, z));
+                            this.sectionsNotListeningTo.add(sectionPos);
                             continue;
                         }
-                        ChunkSection section = sectionArray[Pos.SectionYIndex.fromSectionCoord(trackedSections.world(), y)];
+                        ChunkSection section = sectionArray[Pos.SectionYIndex.fromSectionCoord(world, y)];
 
                         BlockListeningSection blockListeningSection = (BlockListeningSection) section;
-                        blockListeningSection.addToCallback(this.blockGroup, this);
+                        blockListeningSection.lithium$addToCallback(this.blockGroup, this, ChunkSectionPos.asLong(x, y, z), world);
                     }
                 }
             }
+            this.isListeningToAll = (this.sectionsNotListeningTo == null || this.sectionsNotListeningTo.isEmpty())
+                    && (this.sectionsUnsubscribed == null || this.sectionsUnsubscribed.isEmpty());
             this.setChanged(this.getWorldTime());
         }
         this.timesRegistered++;
@@ -103,13 +109,13 @@ public class SectionedBlockChangeTracker {
                     ChunkSection section = sectionArray[Pos.SectionYIndex.fromSectionCoord(world, y)];
 
                     BlockListeningSection blockListeningSection = (BlockListeningSection) section;
-                    blockListeningSection.removeFromCallback(this.blockGroup, this);
+                    blockListeningSection.lithium$removeFromCallback(this.blockGroup, this);
                 }
             }
         }
         this.sectionsNotListeningTo = null;
-        //noinspection unchecked
-        ((LithiumInternerWrapper<SectionedBlockChangeTracker>)world).deleteCanonical(this);
+        LithiumInterner<SectionedBlockChangeTracker> blockChangeTrackers = ((LithiumData) world).lithium$getData().blockChangeTrackers();
+        blockChangeTrackers.deleteCanonical(this);
     }
 
     public void listenToAllSections() {
@@ -119,16 +125,17 @@ public class SectionedBlockChangeTracker {
             for (int i = notListeningTo.size() - 1; i >= 0; i--) {
                 changed = true;
                 ChunkSectionPos chunkSectionPos = notListeningTo.get(i);
-                Chunk chunk = this.trackedWorldSections.world().getChunk(chunkSectionPos.getX(), chunkSectionPos.getZ(), ChunkStatus.FULL, false);
+                World world = this.trackedWorldSections.world();
+                Chunk chunk = world.getChunk(chunkSectionPos.getX(), chunkSectionPos.getZ(), ChunkStatus.FULL, false);
                 if (chunk != null) {
                     notListeningTo.remove(i);
                 } else {
                     //Chunk not loaded, cannot listen to all sections.
                     return;
                 }
-                ChunkSection section = chunk.getSectionArray()[Pos.SectionYIndex.fromSectionCoord(this.trackedWorldSections.world(), chunkSectionPos.getY())];
+                ChunkSection section = chunk.getSectionArray()[Pos.SectionYIndex.fromSectionCoord(world, chunkSectionPos.getY())];
                 BlockListeningSection blockListeningSection = (BlockListeningSection) section;
-                blockListeningSection.addToCallback(this.blockGroup, this);
+                blockListeningSection.lithium$addToCallback(this.blockGroup, this, chunkSectionPos.asLong(), world);
             }
         }
         if (this.sectionsUnsubscribed != null) {
@@ -136,7 +143,7 @@ public class SectionedBlockChangeTracker {
             for (int i = unsubscribed.size() - 1; i >= 0; i--) {
                 changed = true;
                 BlockListeningSection blockListeningSection = unsubscribed.remove(i);
-                blockListeningSection.addToCallback(this.blockGroup, this);
+                blockListeningSection.lithium$addToCallback(this.blockGroup, this, Long.MIN_VALUE, null);
             }
         }
         this.isListeningToAll = true;
@@ -191,5 +198,14 @@ public class SectionedBlockChangeTracker {
     @Override
     public int hashCode() {
         return this.getClass().hashCode() ^ this.trackedWorldSections.hashCode() ^ this.blockGroup.hashCode();
+    }
+
+    public void onChunkSectionInvalidated(ChunkSectionPos sectionPos) {
+        if (this.sectionsNotListeningTo == null) {
+            this.sectionsNotListeningTo = new ArrayList<>();
+        }
+        this.sectionsNotListeningTo.add(sectionPos);
+        this.setChanged(this.getWorldTime());
+        this.isListeningToAll = false;
     }
 }

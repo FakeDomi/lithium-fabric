@@ -5,6 +5,8 @@ import me.jellysquid.mods.lithium.common.entity.block_tracking.ChunkSectionChang
 import me.jellysquid.mods.lithium.common.entity.block_tracking.SectionedBlockChangeTracker;
 import net.minecraft.block.BlockState;
 import net.minecraft.network.PacketByteBuf;
+import net.minecraft.util.math.ChunkSectionPos;
+import net.minecraft.world.World;
 import net.minecraft.world.chunk.ChunkSection;
 import net.minecraft.world.chunk.PalettedContainer;
 import org.spongepowered.asm.mixin.Final;
@@ -30,19 +32,34 @@ public abstract class ChunkSectionMixin implements BlockCountingSection, BlockLi
     @Shadow
     @Final
     private PalettedContainer<BlockState> blockStateContainer;
+
     @Unique
     private short[] countsByFlag = null;
+    @Unique
     private ChunkSectionChangeCallback changeListener;
+    @Unique
     private short listeningMask;
 
+    @Unique
+    private static void addToFlagCount(short[] countsByFlag, BlockState state, short change) {
+        int flags = ((BlockStateFlagHolder) state).lithium$getAllFlags();
+        int i;
+        while ((i = Integer.numberOfTrailingZeros(flags)) < 32 && i < countsByFlag.length) {
+            //either count up by one (prevFlag not set) or down by one (prevFlag set)
+            countsByFlag[i] += change;
+            flags &= ~(1 << i);
+        }
+    }
+
     @Override
-    public boolean mayContainAny(TrackedBlockStatePredicate trackedBlockStatePredicate) {
+    public boolean lithium$mayContainAny(TrackedBlockStatePredicate trackedBlockStatePredicate) {
         if (this.countsByFlag == null) {
             fastInitClientCounts();
         }
         return this.countsByFlag[trackedBlockStatePredicate.getIndex()] != (short) 0;
     }
 
+    @Unique
     private void fastInitClientCounts() {
         this.countsByFlag = new short[BlockStateFlags.NUM_TRACKED_FLAGS];
         for (TrackedBlockStatePredicate trackedBlockStatePredicate : BlockStateFlags.TRACKED_FLAGS) {
@@ -64,18 +81,8 @@ public abstract class ChunkSectionMixin implements BlockCountingSection, BlockLi
     private void initFlagCounters(PalettedContainer<BlockState> palettedContainer, PalettedContainer.Counter<BlockState> consumer) {
         palettedContainer.count((state, count) -> {
             consumer.accept(state, count);
-            addToFlagCount(this.countsByFlag, state, count);
+            addToFlagCount(this.countsByFlag, state, (short) count);
         });
-    }
-
-    private static void addToFlagCount(short[] countsByFlag, BlockState state, int change) {
-        int flags = ((BlockStateFlagHolder) state).getAllFlags();
-        int i;
-        while ((i = Integer.numberOfTrailingZeros(flags)) < 32 && i < countsByFlag.length) {
-            //either count up by one (prevFlag not set) or down by one (prevFlag set)
-            countsByFlag[i] += change;
-            flags &= ~(1 << i);
-        }
     }
 
     @Inject(method = "calculateCounts()V", at = @At("HEAD"))
@@ -102,12 +109,17 @@ public abstract class ChunkSectionMixin implements BlockCountingSection, BlockLi
             locals = LocalCapture.CAPTURE_FAILHARD
     )
     private void updateFlagCounters(int x, int y, int z, BlockState newState, boolean lock, CallbackInfoReturnable<BlockState> cir, BlockState oldState) {
+        this.lithium$trackBlockStateChange(newState, oldState);
+    }
+
+    @Override
+    public void lithium$trackBlockStateChange(BlockState newState, BlockState oldState) {
         short[] countsByFlag = this.countsByFlag;
         if (countsByFlag == null) {
             return;
         }
-        int prevFlags = ((BlockStateFlagHolder) oldState).getAllFlags();
-        int flags = ((BlockStateFlagHolder) newState).getAllFlags();
+        int prevFlags = ((BlockStateFlagHolder) oldState).lithium$getAllFlags();
+        int flags = ((BlockStateFlagHolder) newState).lithium$getAllFlags();
 
         int flagsXOR = prevFlags ^ flags;
         //we need to iterate over indices that changed or are in the listeningMask
@@ -122,7 +134,7 @@ public abstract class ChunkSectionMixin implements BlockCountingSection, BlockLi
             int flagBit = 1 << flagIndex;
             //either count up by one (prevFlag not set) or down by one (prevFlag set)
             if ((flagsXOR & flagBit) != 0) {
-                countsByFlag[flagIndex] += 1 - (((prevFlags >>> flagIndex) & 1) << 1);
+                countsByFlag[flagIndex] += (short) (1 - (((prevFlags >>> flagIndex) & 1) << 1));
             }
             if ((this.listeningMask & flagBit) != 0) {
                 this.listeningMask = this.changeListener.onBlockChange(flagIndex, this);
@@ -132,26 +144,30 @@ public abstract class ChunkSectionMixin implements BlockCountingSection, BlockLi
     }
 
     @Override
-    public void addToCallback(ListeningBlockStatePredicate blockGroup, SectionedBlockChangeTracker tracker) {
+    public void lithium$addToCallback(ListeningBlockStatePredicate blockGroup, SectionedBlockChangeTracker tracker, long sectionPos, World world) {
         if (this.changeListener == null) {
-            this.changeListener = new ChunkSectionChangeCallback();
+            if (sectionPos == Long.MIN_VALUE || world == null) {
+                throw new IllegalArgumentException("Expected world and section pos during intialization!");
+            }
+            this.changeListener = ChunkSectionChangeCallback.create(sectionPos, world);
         }
 
         this.listeningMask = this.changeListener.addTracker(tracker, blockGroup);
     }
 
     @Override
-    public void removeFromCallback(ListeningBlockStatePredicate blockGroup, SectionedBlockChangeTracker tracker) {
+    public void lithium$removeFromCallback(ListeningBlockStatePredicate blockGroup, SectionedBlockChangeTracker tracker) {
         if (this.changeListener != null) {
             this.listeningMask = this.changeListener.removeTracker(tracker, blockGroup);
         }
     }
 
-    private boolean isListening(ListeningBlockStatePredicate blockGroup) {
-        return (this.listeningMask & (1 << blockGroup.getIndex())) != 0;
-    }
-
-    public void invalidateSection() {
-        //TODO on section unload, unregister all kinds of stuff
+    @Override
+    @Unique
+    public void lithium$invalidateListeningSection(ChunkSectionPos sectionPos) {
+        if (this.listeningMask != 0) {
+            this.changeListener.onChunkSectionInvalidated(sectionPos);
+            this.listeningMask = 0;
+        }
     }
 }

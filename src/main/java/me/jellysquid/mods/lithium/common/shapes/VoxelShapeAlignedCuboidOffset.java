@@ -17,14 +17,14 @@ public class VoxelShapeAlignedCuboidOffset extends VoxelShapeAlignedCuboid {
     //instead of keeping those variables, equivalent information can probably be recovered from minX, minY, minZ (which are 1/8th of a block aligned), but possibly with additional floating point error
 
     public VoxelShapeAlignedCuboidOffset(VoxelShapeAlignedCuboid originalShape, VoxelSet voxels, double xOffset, double yOffset, double zOffset) {
-        super(voxels, originalShape.xSegments, originalShape.ySegments, originalShape.zSegments,
+        super(voxels,
                 originalShape.minX + xOffset, originalShape.minY + yOffset, originalShape.minZ + zOffset,
-                originalShape.maxX + xOffset, originalShape.maxY + yOffset, originalShape.maxZ + zOffset);
+                originalShape.maxX + xOffset, originalShape.maxY + yOffset, originalShape.maxZ + zOffset, originalShape.xyzResolution);
 
         if (originalShape instanceof VoxelShapeAlignedCuboidOffset) {
-            this.xOffset = ((VoxelShapeAlignedCuboidOffset) originalShape).xOffset + xOffset;
-            this.yOffset = ((VoxelShapeAlignedCuboidOffset) originalShape).yOffset + yOffset;
-            this.zOffset = ((VoxelShapeAlignedCuboidOffset) originalShape).zOffset + zOffset;
+            this.xOffset = ((VoxelShapeAlignedCuboidOffset) originalShape).xOffset + xOffset; //TODO the float addition here might cause non-vanilla floating point errors
+            this.yOffset = ((VoxelShapeAlignedCuboidOffset) originalShape).yOffset + yOffset; // Float non-associativity technically causes an issue here
+            this.zOffset = ((VoxelShapeAlignedCuboidOffset) originalShape).zOffset + zOffset; // In practice, this is likely not a problem
         } else {
             this.xOffset = xOffset;
             this.yOffset = yOffset;
@@ -55,11 +55,11 @@ public class VoxelShapeAlignedCuboidOffset extends VoxelShapeAlignedCuboid {
     private double calculatePenetration(AxisCycleDirection dir, Box box, double maxDist) {
         switch (dir) {
             case NONE:
-                return VoxelShapeAlignedCuboidOffset.calculatePenetration(this.minX, this.maxX, this.xSegments, this.xOffset, box.minX, box.maxX, maxDist);
+                return VoxelShapeAlignedCuboidOffset.calculatePenetration(this.minX, this.maxX, this.getXSegments(), this.xOffset, box.minX, box.maxX, maxDist);
             case FORWARD:
-                return VoxelShapeAlignedCuboidOffset.calculatePenetration(this.minZ, this.maxZ, this.zSegments, this.zOffset, box.minZ, box.maxZ, maxDist);
+                return VoxelShapeAlignedCuboidOffset.calculatePenetration(this.minZ, this.maxZ, this.getZSegments(), this.zOffset, box.minZ, box.maxZ, maxDist);
             case BACKWARD:
-                return VoxelShapeAlignedCuboidOffset.calculatePenetration(this.minY, this.maxY, this.ySegments, this.yOffset, box.minY, box.maxY, maxDist);
+                return VoxelShapeAlignedCuboidOffset.calculatePenetration(this.minY, this.maxY, this.getYSegments(), this.yOffset, box.minY, box.maxY, maxDist);
             default:
                 throw new IllegalArgumentException();
         }
@@ -134,20 +134,30 @@ public class VoxelShapeAlignedCuboidOffset extends VoxelShapeAlignedCuboid {
 
     @Override
     public DoubleList getPointPositions(Direction.Axis axis) {
-        return new OffsetFractionalDoubleList(axis.choose(this.xSegments, this.ySegments, this.zSegments),
-                axis.choose(this.xOffset, this.yOffset, this.zOffset));
+        return switch (axis) {
+            case X -> new OffsetFractionalDoubleList(this.getXSegments(), this.xOffset);
+            case Y -> new OffsetFractionalDoubleList(this.getYSegments(), this.yOffset);
+            case Z -> new OffsetFractionalDoubleList(this.getZSegments(), this.zOffset);
+        };
     }
 
     @Override
     protected double getPointPosition(Direction.Axis axis, int index) {
-        return axis.choose(this.xOffset, this.yOffset, this.zOffset) +
-                ((double) index / (double) axis.choose(this.xSegments, this.ySegments, this.zSegments));
+        return switch (axis) {
+            case X -> this.xOffset + (double) index / (double) this.getXSegments();
+            case Y -> this.yOffset + (double) index / (double) this.getYSegments();
+            case Z -> this.zOffset + (double) index / (double) this.getZSegments();
+        };
     }
 
     @Override
     protected int getCoordIndex(Direction.Axis axis, double coord) {
-        coord -= axis.choose(this.xOffset, this.yOffset, this.zOffset);
-        int numSegments = axis.choose(this.xSegments, this.ySegments, this.zSegments);
-        return MathHelper.clamp(MathHelper.floor(coord * (double) numSegments), -1, numSegments);
+        int numSegments;
+        coord = switch (axis) {
+            case X -> (coord - this.xOffset) * (numSegments = this.getXSegments());
+            case Y -> (coord - this.yOffset) * (numSegments = this.getYSegments());
+            case Z -> (coord - this.zOffset) * (numSegments = this.getZSegments());
+        };
+        return MathHelper.clamp(MathHelper.floor(coord), -1, numSegments);
     }
 }

@@ -1,6 +1,5 @@
 package me.jellysquid.mods.lithium.mixin.ai.poi;
 
-import com.mojang.datafixers.DataFixer;
 import com.mojang.serialization.Codec;
 import me.jellysquid.mods.lithium.common.util.Distances;
 import me.jellysquid.mods.lithium.common.world.interests.PointOfInterestSetExtended;
@@ -9,9 +8,9 @@ import me.jellysquid.mods.lithium.common.world.interests.RegionBasedStorageSecti
 import me.jellysquid.mods.lithium.common.world.interests.iterator.NearbyPointOfInterestStream;
 import me.jellysquid.mods.lithium.common.world.interests.iterator.SinglePointOfInterestTypeFilter;
 import me.jellysquid.mods.lithium.common.world.interests.iterator.SphereChunkOrderedPoiSetSpliterator;
-import net.minecraft.datafixer.DataFixTypes;
 import net.minecraft.registry.DynamicRegistryManager;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.server.world.ChunkErrorHandler;
 import net.minecraft.util.annotation.Debug;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
@@ -24,13 +23,13 @@ import net.minecraft.world.poi.PointOfInterest;
 import net.minecraft.world.poi.PointOfInterestSet;
 import net.minecraft.world.poi.PointOfInterestStorage;
 import net.minecraft.world.poi.PointOfInterestType;
+import net.minecraft.world.storage.ChunkPosKeyedStorage;
 import net.minecraft.world.storage.SerializingRegionBasedStorage;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -44,8 +43,9 @@ import java.util.stream.StreamSupport;
 public abstract class PointOfInterestStorageMixin extends SerializingRegionBasedStorage<PointOfInterestSet>
         implements PointOfInterestStorageExtended {
 
-    public PointOfInterestStorageMixin(Path path, Function<Runnable, Codec<PointOfInterestSet>> codecFactory, Function<Runnable, PointOfInterestSet> factory, DataFixer dataFixer, DataFixTypes dataFixTypes, boolean dsync, DynamicRegistryManager dynamicRegistryManager, HeightLimitView world) {
-        super(path, codecFactory, factory, dataFixer, dataFixTypes, dsync, dynamicRegistryManager, world);
+
+    public PointOfInterestStorageMixin(ChunkPosKeyedStorage storageAccess, Function<Runnable, Codec<PointOfInterestSet>> codecFactory, Function<Runnable, PointOfInterestSet> factory, DynamicRegistryManager registryManager, ChunkErrorHandler errorHandler, HeightLimitView world) {
+        super(storageAccess, codecFactory, factory, registryManager, errorHandler, world);
     }
 
     /**
@@ -58,7 +58,7 @@ public abstract class PointOfInterestStorageMixin extends SerializingRegionBased
     public Stream<PointOfInterest> getInChunk(Predicate<RegistryEntry<PointOfInterestType>> predicate, ChunkPos pos,
                                               PointOfInterestStorage.OccupationStatus status) {
         return ((RegionBasedStorageSectionExtended<PointOfInterestSet>) this)
-                .getWithinChunkColumn(pos.x, pos.z)
+                .lithium$getWithinChunkColumn(pos.x, pos.z)
                 .flatMap(set -> set.get(predicate, status));
     }
 
@@ -143,9 +143,9 @@ public abstract class PointOfInterestStorageMixin extends SerializingRegionBased
     }
 
     @Override
-    public Optional<PointOfInterest> findNearestForPortalLogic(BlockPos origin, int radius, RegistryEntry<PointOfInterestType> type,
-                                                               PointOfInterestStorage.OccupationStatus status,
-                                                               Predicate<PointOfInterest> afterSortPredicate, WorldBorder worldBorder) {
+    public Optional<PointOfInterest> lithium$findNearestForPortalLogic(BlockPos origin, int radius, RegistryEntry<PointOfInterestType> type,
+                                                                       PointOfInterestStorage.OccupationStatus status,
+                                                                       Predicate<PointOfInterest> afterSortPredicate, WorldBorder worldBorder) {
         // Order of the POI:
         // return closest accepted POI (L2 distance). If several exist:
         // return the one with most negative Y. If several exist:
@@ -201,8 +201,8 @@ public abstract class PointOfInterestStorageMixin extends SerializingRegionBased
 
         for (int x = minChunkX; x <= maxChunkX; x++) {
             for (int z = minChunkZ; z <= maxChunkZ; z++) {
-                for (PointOfInterestSet set : storage.getInChunkColumn(x, z)) {
-                    ((PointOfInterestSetExtended) set).collectMatchingPoints(predicate, status, collector);
+                for (PointOfInterestSet set : storage.lithium$getInChunkColumn(x, z)) {
+                    ((PointOfInterestSetExtended) set).lithium$collectMatchingPoints(predicate, status, collector);
                 }
             }
         }

@@ -4,10 +4,10 @@ import me.jellysquid.mods.lithium.common.client.ClientWorldAccessor;
 import me.jellysquid.mods.lithium.common.entity.EntityClassGroup;
 import me.jellysquid.mods.lithium.common.entity.pushable.EntityPushablePredicate;
 import me.jellysquid.mods.lithium.common.world.chunk.ClassGroupFilterableList;
-import me.jellysquid.mods.lithium.mixin.chunk.entity_class_groups.ClientEntityManagerAccessor;
-import me.jellysquid.mods.lithium.mixin.chunk.entity_class_groups.EntityTrackingSectionAccessor;
-import me.jellysquid.mods.lithium.mixin.chunk.entity_class_groups.ServerEntityManagerAccessor;
-import me.jellysquid.mods.lithium.mixin.chunk.entity_class_groups.ServerWorldAccessor;
+import me.jellysquid.mods.lithium.mixin.util.accessors.ClientEntityManagerAccessor;
+import me.jellysquid.mods.lithium.mixin.util.accessors.EntityTrackingSectionAccessor;
+import me.jellysquid.mods.lithium.mixin.util.accessors.ServerEntityManagerAccessor;
+import me.jellysquid.mods.lithium.mixin.util.accessors.ServerWorldAccessor;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.collection.TypeFilterableList;
 import net.minecraft.util.function.LazyIterationConsumer;
@@ -16,10 +16,12 @@ import net.minecraft.util.math.Box;
 import net.minecraft.world.EntityView;
 import net.minecraft.world.World;
 import net.minecraft.world.entity.SectionedEntityCache;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Predicate;
 
 public class WorldHelper {
     public static final boolean CUSTOM_TYPE_FILTERABLE_LIST_DISABLED = !ClassGroupFilterableList.class.isAssignableFrom(TypeFilterableList.class);
@@ -27,7 +29,7 @@ public class WorldHelper {
     /**
      * Partial [VanillaCopy]
      * The returned entity iterator is only used for collision interactions. As most entities do not collide with other
-     * entities (cramming is different), getting those is not necessary. This is why we only get entities when they override
+     * entities (cramming is different), getting them is not necessary. This is why we only get entities when they override
      * {@link Entity#isCollidable()} if the reference entity does not override {@link Entity#collidesWith(Entity)}.
      * Note that the returned iterator contains entities that override these methods. This does not mean that these methods
      * always return true.
@@ -38,7 +40,7 @@ public class WorldHelper {
      * @return iterator of entities with collision boxes
      */
     public static List<Entity> getEntitiesForCollision(EntityView entityView, Box box, Entity collidingEntity) {
-        if (!CUSTOM_TYPE_FILTERABLE_LIST_DISABLED && entityView instanceof World world && (collidingEntity == null || !EntityClassGroup.MINECART_BOAT_LIKE_COLLISION.contains(collidingEntity.getClass()))) {
+        if (!CUSTOM_TYPE_FILTERABLE_LIST_DISABLED && entityView instanceof World world && (collidingEntity == null || !EntityClassGroup.CUSTOM_COLLIDE_LIKE_MINECART_BOAT_WINDCHARGE.contains(collidingEntity.getClass()))) {
             SectionedEntityCache<Entity> cache = getEntityCacheOrNull(world);
             if (cache != null) {
                 world.getProfiler().visit("getEntities");
@@ -50,11 +52,27 @@ public class WorldHelper {
         return entityView.getOtherEntities(collidingEntity, box);
     }
 
-    //Requires chunk.entity_class_groups
+    public static List<Entity> getOtherEntitiesForCollision(EntityView entityView, Box box, @Nullable Entity collidingEntity, Predicate<? super Entity> entityPredicate) {
+        if (!CUSTOM_TYPE_FILTERABLE_LIST_DISABLED && entityView instanceof World world) {
+            if (collidingEntity == null || !EntityClassGroup.CUSTOM_COLLIDE_LIKE_MINECART_BOAT_WINDCHARGE.contains(collidingEntity.getClass())) {
+                SectionedEntityCache<Entity> cache = getEntityCacheOrNull(world);
+                if (cache != null) {
+                    world.getProfiler().visit("getEntities");
+                    return getEntitiesOfClassGroup(cache, collidingEntity, EntityClassGroup.NoDragonClassGroup.BOAT_SHULKER_LIKE_COLLISION, box);
+                }
+            }
+        }
+        //use vanilla code in case the shortcut is not applicable
+        // due to the reference entity implementing special collision or the mixin being disabled in the config
+        return entityView.getOtherEntities(collidingEntity, box, entityPredicate);
+    }
+
+
+    //Requires util.accessors
     public static SectionedEntityCache<Entity> getEntityCacheOrNull(World world) {
         if (world instanceof ClientWorldAccessor) {
             //noinspection unchecked
-            return ((ClientEntityManagerAccessor<Entity>) ((ClientWorldAccessor) world).getEntityManager()).getCache();
+            return ((ClientEntityManagerAccessor<Entity>) ((ClientWorldAccessor) world).lithium$getEntityManager()).getCache();
         } else if (world instanceof ServerWorldAccessor) {
             //noinspection unchecked
             return ((ServerEntityManagerAccessor<Entity>) ((ServerWorldAccessor) world).getEntityManager()).getCache();
@@ -68,11 +86,11 @@ public class WorldHelper {
             //noinspection unchecked
             TypeFilterableList<Entity> allEntities = ((EntityTrackingSectionAccessor<Entity>) section).getCollection();
             //noinspection unchecked
-            Collection<Entity> entitiesOfType = ((ClassGroupFilterableList<Entity>) allEntities).getAllOfGroupType(entityClassGroup);
+            Collection<Entity> entitiesOfType = ((ClassGroupFilterableList<Entity>) allEntities).lithium$getAllOfGroupType(entityClassGroup);
             if (!entitiesOfType.isEmpty()) {
                 for (Entity entity : entitiesOfType) {
                     if (entity.getBoundingBox().intersects(box) && !entity.isSpectator() && entity != collidingEntity) {
-                        //skip the dragon piece check without issues by only allowing only EntityClassGroup.NoDragonClassGroup as type
+                        //skip the dragon piece check without issues by only allowing EntityClassGroup.NoDragonClassGroup as type
                         entities.add(entity);
                     }
                 }
@@ -84,7 +102,7 @@ public class WorldHelper {
 
     public static List<Entity> getPushableEntities(World world, SectionedEntityCache<Entity> cache, Entity except, Box box, EntityPushablePredicate<? super Entity> entityPushablePredicate) {
         ArrayList<Entity> entities = new ArrayList<>();
-        cache.forEachInBox(box, section -> ((ClimbingMobCachingSection) section).collectPushableEntities(world, except, box, entityPushablePredicate, entities));
+        cache.forEachInBox(box, section -> ((ClimbingMobCachingSection) section).lithium$collectPushableEntities(world, except, box, entityPushablePredicate, entities));
         return entities;
     }
 
@@ -95,10 +113,10 @@ public class WorldHelper {
         return localX > 0 && localZ > 0 && localX < 15 && localZ < 15;
     }
 
-    public static boolean areNeighborsWithinSameChunkSection(BlockPos pos) {
-        int localX = pos.getX() & 15;
-        int localY = pos.getY() & 15;
-        int localZ = pos.getZ() & 15;
+    public static boolean areNeighborsWithinSameChunkSection(int x, int y, int z) {
+        int localX = x & 15;
+        int localY = y & 15;
+        int localZ = z & 15;
 
         return localX > 0 && localY > 0 && localZ > 0 && localX < 15 && localY < 15 && localZ < 15;
     }

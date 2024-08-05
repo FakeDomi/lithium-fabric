@@ -21,29 +21,26 @@ public class VoxelShapeAlignedCuboid extends VoxelShapeSimpleCube {
     //EPSILON for use in cases where it must be a lot smaller than 1/256 and larger than EPSILON
     static final double LARGE_EPSILON = 10 * EPSILON;
 
-    //In bit aligned shapes the bitset adds segments are between minX/Y/Z and maxX/Y/Z.
+    //In bit-aligned shapes the bitset adds segments are between minX/Y/Z and maxX/Y/Z.
     //Segments all have the same size. There is an additional collision box between two adjacent segments (if both are inside the shape)
-    protected final int xSegments;
-    protected final int ySegments;
-    protected final int zSegments;
+    protected final byte xyzResolution;
 
     public VoxelShapeAlignedCuboid(double minX, double minY, double minZ, double maxX, double maxY, double maxZ, int xRes, int yRes, int zRes) {
         super(new CuboidVoxelSet(1 << xRes, 1 << yRes, 1 << zRes, minX, minY, minZ, maxX, maxY, maxZ), minX, minY, minZ, maxX, maxY, maxZ);
 
-        this.xSegments = 1 << xRes;
-        this.ySegments = 1 << yRes;
-        this.zSegments = 1 << zRes;
+        if (xRes > 3 || yRes > 3 || zRes > 3 || xRes < 0 || yRes < 0 || zRes < 0) {
+            throw new IllegalArgumentException("Resolution must be between 0 and 3");
+        }
+        
+        this.xyzResolution = (byte) (xRes << 4 | yRes << 2 | zRes);
     }
 
     /**
      * Constructor for use in offset() calls.
      */
-    public VoxelShapeAlignedCuboid(VoxelSet voxels, int xSegments, int ySegments, int zSegments, double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+    public VoxelShapeAlignedCuboid(VoxelSet voxels, double minX, double minY, double minZ, double maxX, double maxY, double maxZ, byte xyzResolution) {
         super(voxels, minX, minY, minZ, maxX, maxY, maxZ);
-
-        this.xSegments = xSegments;
-        this.ySegments = ySegments;
-        this.zSegments = zSegments;
+        this.xyzResolution = xyzResolution;
     }
 
     @Override
@@ -70,11 +67,11 @@ public class VoxelShapeAlignedCuboid extends VoxelShapeSimpleCube {
     private double calculatePenetration(AxisCycleDirection dir, Box box, double maxDist) {
         switch (dir) {
             case NONE:
-                return VoxelShapeAlignedCuboid.calculatePenetration(this.minX, this.maxX, this.xSegments, box.minX, box.maxX, maxDist);
+                return VoxelShapeAlignedCuboid.calculatePenetration(this.minX, this.maxX, this.getXSegments(), box.minX, box.maxX, maxDist);
             case FORWARD:
-                return VoxelShapeAlignedCuboid.calculatePenetration(this.minZ, this.maxZ, this.zSegments, box.minZ, box.maxZ, maxDist);
+                return VoxelShapeAlignedCuboid.calculatePenetration(this.minZ, this.maxZ, this.getZSegments(), box.minZ, box.maxZ, maxDist);
             case BACKWARD:
-                return VoxelShapeAlignedCuboid.calculatePenetration(this.minY, this.maxY, this.ySegments, box.minY, box.maxY, maxDist);
+                return VoxelShapeAlignedCuboid.calculatePenetration(this.minY, this.maxY, this.getYSegments(), box.minY, box.maxY, maxDist);
             default:
                 throw new IllegalArgumentException();
         }
@@ -134,17 +131,41 @@ public class VoxelShapeAlignedCuboid extends VoxelShapeSimpleCube {
 
     @Override
     public DoubleList getPointPositions(Direction.Axis axis) {
-        return new FractionalDoubleList(axis.choose(this.xSegments, this.ySegments, this.zSegments));
+        return switch (axis) {
+            case X -> new FractionalDoubleList(this.getXSegments());
+            case Y -> new FractionalDoubleList(this.getYSegments());
+            case Z -> new FractionalDoubleList(this.getZSegments());
+        };
     }
 
     @Override
     protected double getPointPosition(Direction.Axis axis, int index) {
-        return (double) index / (double) axis.choose(this.xSegments, this.ySegments, this.zSegments);
+        return switch (axis) {
+            case X -> (double) index / (double) this.getXSegments();
+            case Y -> (double) index / (double) this.getYSegments();
+            case Z -> (double) index / (double) this.getZSegments();
+        };
     }
 
     @Override
     protected int getCoordIndex(Direction.Axis axis, double coord) {
-        int i = axis.choose(this.xSegments, this.ySegments, this.zSegments);
+        int i = switch (axis) {
+            case X -> this.getXSegments();
+            case Y -> this.getYSegments();
+            case Z -> this.getZSegments();
+        };
         return MathHelper.clamp(MathHelper.floor(coord * (double) i), -1, i);
+    }
+
+    protected int getXSegments() {
+        return 1 << (this.xyzResolution >>> 4);
+    }
+
+    protected int getYSegments() {
+        return 1 << ((this.xyzResolution >>> 2) & 3);
+    }
+
+    protected int getZSegments() {
+        return 1 << (this.xyzResolution & 3);
     }
 }

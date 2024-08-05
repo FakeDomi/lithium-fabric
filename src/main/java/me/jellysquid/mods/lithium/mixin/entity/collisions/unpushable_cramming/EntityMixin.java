@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Entity.class)
 public class EntityMixin implements BlockCachingEntity {
     @Shadow
-    private @Nullable BlockState blockStateAtPos;
+    private @Nullable BlockState stateAtPos;
 
     @Inject(
             method = "setPos(DDD)V",
@@ -26,7 +26,7 @@ public class EntityMixin implements BlockCachingEntity {
             )
     )
     private void onPositionChanged(double x, double y, double z, CallbackInfo ci) {
-        this.lithiumOnBlockCacheDeleted();
+        this.lithium$OnBlockCacheDeleted();
     }
 
     @Inject(
@@ -39,7 +39,7 @@ public class EntityMixin implements BlockCachingEntity {
             )
     )
     private void onBaseTick(CallbackInfo ci) {
-        this.lithiumOnBlockCacheDeleted();
+        this.lithium$OnBlockCacheDeleted();
     }
 
     @Inject(
@@ -51,11 +51,11 @@ public class EntityMixin implements BlockCachingEntity {
             )
     )
     private void onBlockCached(CallbackInfoReturnable<BlockState> cir) {
-        this.lithiumOnBlockCacheSet(this.blockStateAtPos);
+        this.lithium$OnBlockCacheSet(this.stateAtPos);
     }
 
     @Override
-    public BlockState getCachedFeetBlockState() {
-        return this.blockStateAtPos;
+    public BlockState lithium$getCachedFeetBlockState() {
+        return this.stateAtPos;
     }
 }

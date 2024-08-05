@@ -1,5 +1,6 @@
 package me.jellysquid.mods.lithium.mixin.util.entity_movement_tracking;
 
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import me.jellysquid.mods.lithium.common.entity.PositionedEntityTrackingSection;
 import me.jellysquid.mods.lithium.common.entity.movement_tracker.EntityMovementTrackerSection;
@@ -11,28 +12,30 @@ import net.minecraft.world.entity.EntityTrackingStatus;
 import net.minecraft.world.entity.SectionedEntityCache;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
 
 @Mixin(EntityTrackingSection.class)
-public abstract class EntityTrackingSectionMixin<T extends EntityLike> implements EntityMovementTrackerSection, PositionedEntityTrackingSection {
+public abstract class EntityTrackingSectionMixin implements EntityMovementTrackerSection, PositionedEntityTrackingSection {
     @Shadow
     private EntityTrackingStatus status;
 
     @Shadow
     public abstract boolean isEmpty();
 
+    @Unique
     private final ReferenceOpenHashSet<SectionedEntityMovementTracker<?, ?>> sectionVisibilityListeners = new ReferenceOpenHashSet<>(0);
+    @Unique
     @SuppressWarnings("unchecked")
     private final ArrayList<SectionedEntityMovementTracker<?, ?>>[] entityMovementListenersByType = new ArrayList[MovementTrackerHelper.NUM_MOVEMENT_NOTIFYING_CLASSES];
+    @Unique
     private final long[] lastEntityMovementByType = new long[MovementTrackerHelper.NUM_MOVEMENT_NOTIFYING_CLASSES];
 
     @Override
-    public void addListener(SectionedEntityMovementTracker<?, ?> listener) {
+    public void lithium$addListener(SectionedEntityMovementTracker<?, ?> listener) {
         this.sectionVisibilityListeners.add(listener);
         if (this.status.shouldTrack()) {
             listener.onSectionEnteredRange(this);
@@ -40,18 +43,18 @@ public abstract class EntityTrackingSectionMixin<T extends EntityLike> implement
     }
 
     @Override
-    public void removeListener(SectionedEntityCache<?> sectionedEntityCache, SectionedEntityMovementTracker<?, ?> listener) {
+    public void lithium$removeListener(SectionedEntityCache<?> sectionedEntityCache, SectionedEntityMovementTracker<?, ?> listener) {
         boolean removed = this.sectionVisibilityListeners.remove(listener);
         if (this.status.shouldTrack() && removed) {
             listener.onSectionLeftRange(this);
         }
         if (this.isEmpty()) {
-            sectionedEntityCache.removeSection(this.getPos());
+            sectionedEntityCache.removeSection(this.lithium$getPos());
         }
     }
 
     @Override
-    public void trackEntityMovement(int notificationMask, long time) {
+    public void lithium$trackEntityMovement(int notificationMask, long time) {
         long[] lastEntityMovementByType = this.lastEntityMovementByType;
         int size = lastEntityMovementByType.length;
         int mask;
@@ -72,15 +75,13 @@ public abstract class EntityTrackingSectionMixin<T extends EntityLike> implement
     }
 
     @Override
-    public long getChangeTime(int trackedClass) {
+    public long lithium$getChangeTime(int trackedClass) {
         return this.lastEntityMovementByType[trackedClass];
     }
 
-    @Inject(method = "isEmpty()Z", at = @At(value = "HEAD"), cancellable = true)
-    public void isEmpty(CallbackInfoReturnable<Boolean> cir) {
-        if (!this.sectionVisibilityListeners.isEmpty()) {
-            cir.setReturnValue(false);
-        }
+    @ModifyReturnValue(method = "isEmpty()Z", at = @At(value = "RETURN"))
+    public boolean modifyIsEmpty(boolean previousIsEmpty) {
+        return previousIsEmpty && this.sectionVisibilityListeners.isEmpty();
     }
 
 
@@ -105,7 +106,7 @@ public abstract class EntityTrackingSectionMixin<T extends EntityLike> implement
     }
 
     @Override
-    public <S, E extends EntityLike> void listenToMovementOnce(SectionedEntityMovementTracker<E, S> listener, int trackedClass) {
+    public <S, E extends EntityLike> void lithium$listenToMovementOnce(SectionedEntityMovementTracker<E, S> listener, int trackedClass) {
         if (this.entityMovementListenersByType[trackedClass] == null) {
             this.entityMovementListenersByType[trackedClass] = new ArrayList<>();
         }
@@ -113,7 +114,7 @@ public abstract class EntityTrackingSectionMixin<T extends EntityLike> implement
     }
 
     @Override
-    public <S, E extends EntityLike> void removeListenToMovementOnce(SectionedEntityMovementTracker<E, S> listener, int trackedClass) {
+    public <S, E extends EntityLike> void lithium$removeListenToMovementOnce(SectionedEntityMovementTracker<E, S> listener, int trackedClass) {
         if (this.entityMovementListenersByType[trackedClass] != null) {
             this.entityMovementListenersByType[trackedClass].remove(listener);
         }

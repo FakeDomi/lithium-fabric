@@ -6,9 +6,10 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.block.entity.CampfireBlockEntity;
-import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.chunk.BlockEntityTickInvoker;
 import org.spongepowered.asm.mixin.Mixin;
@@ -28,23 +29,23 @@ public class CampfireBlockEntityMixin extends BlockEntity implements SleepingBlo
     }
 
     @Override
-    public WrappedBlockEntityTickInvokerAccessor getTickWrapper() {
+    public WrappedBlockEntityTickInvokerAccessor lithium$getTickWrapper() {
         return tickWrapper;
     }
 
     @Override
-    public void setTickWrapper(WrappedBlockEntityTickInvokerAccessor tickWrapper) {
+    public void lithium$setTickWrapper(WrappedBlockEntityTickInvokerAccessor tickWrapper) {
         this.tickWrapper = tickWrapper;
-        this.setSleepingTicker(null);
+        this.lithium$setSleepingTicker(null);
     }
 
     @Override
-    public BlockEntityTickInvoker getSleepingTicker() {
+    public BlockEntityTickInvoker lithium$getSleepingTicker() {
         return sleepingTicker;
     }
 
     @Override
-    public void setSleepingTicker(BlockEntityTickInvoker sleepingTicker) {
+    public void lithium$setSleepingTicker(BlockEntityTickInvoker sleepingTicker) {
         this.sleepingTicker = sleepingTicker;
     }
 
@@ -53,7 +54,7 @@ public class CampfireBlockEntityMixin extends BlockEntity implements SleepingBlo
             method = "addItem",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/util/collection/DefaultedList;set(ILjava/lang/Object;)Ljava/lang/Object;")
     )
-    private void wakeUpOnAddItem(Entity user, ItemStack stack, int cookTime, CallbackInfoReturnable<Boolean> cir) {
+    private void wakeUpOnAddItem(LivingEntity user, ItemStack stack, int cookTime, CallbackInfoReturnable<Boolean> cir) {
         this.wakeUpNow();
     }
 
@@ -61,7 +62,7 @@ public class CampfireBlockEntityMixin extends BlockEntity implements SleepingBlo
             method = "readNbt",
             at = @At(value = "RETURN")
     )
-    private void wakeUpOnReadNbt(NbtCompound nbt, CallbackInfo ci) {
+    private void wakeUpOnReadNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup, CallbackInfo ci) {
         this.wakeUpNow();
     }
 }
